@@ -48,7 +48,10 @@ def validate_new_dataset(data, required_columns=['date', 'title', 'views', 'day_
         st.error("Cột 'date' trong dataset mới chứa giá trị NaN.")
         return False
     try:
-        data['date'] = pd.to_datetime(data['date'])
+        data['date'] = pd.to_datetime(data['date'], errors='coerce')
+        if data['date'].isna().any():
+            st.error("Một số giá trị trong cột 'date' không hợp lệ và đã bị chuyển thành NaT.")
+            return False
     except Exception as e:
         st.error(f"Lỗi khi chuyển đổi cột 'date' sang định dạng datetime: {str(e)}")
         return False
@@ -58,6 +61,9 @@ def validate_new_dataset(data, required_columns=['date', 'title', 'views', 'day_
     # Tạo time_idx từ date
     data = data.sort_values('date')
     data['time_idx'] = (data['date'] - data['date'].min()).dt.days
+    if data['time_idx'].isna().any():
+        st.error("Không thể tạo cột 'time_idx' từ cột 'date' do dữ liệu không hợp lệ.")
+        return False
     logger.info("Dataset mới hợp lệ")
     return True
 
@@ -87,6 +93,10 @@ def load_tft_model(title, data, forecast_days):
     # Sử dụng date để tạo time_idx
     data = data.sort_values('date')
     data['time_idx'] = (data['date'] - data['date'].min()).dt.days
+    if data['time_idx'].isna().any():
+        logger.error("Cột 'time_idx' chứa giá trị NaN sau khi tạo từ 'date'.")
+        st.error("Cột 'time_idx' chứa giá trị NaN. Vui lòng kiểm tra cột 'date'.")
+        return None, None
     training = TimeSeriesDataSet(
         data,
         time_idx="time_idx",
@@ -184,6 +194,8 @@ if uploaded_file is not None:
             data.fillna(0, inplace=True)
             title = data['title'].iloc[0]
             st.success(f"Dataset mới đã được tải với title: {title}")
+            # In ra để debug
+            st.write("Dữ liệu đầu vào:", data.head())
         else:
             st.error("Dataset mới không hợp lệ. Vui lòng kiểm tra lại.")
             data = None
@@ -245,6 +257,10 @@ if st.button("Dự báo") and data is not None and title is not None:
                     for col in ['views', 'day_of_week', 'month', 'quarter', 'tfidf_score']:
                         df_input[col] = pd.to_numeric(df_input[col], errors='coerce').fillna(0).astype(float)
                     df_input['time_idx'] = (pd.to_datetime(df_input['date']) - pd.to_datetime(df_input['date']).min()).dt.days
+                    if df_input['time_idx'].isna().any():
+                        logger.error("Cột 'time_idx' chứa giá trị NaN trong dự báo TFT.")
+                        st.error("Cột 'time_idx' chứa giá trị NaN. Vui lòng kiểm tra cột 'date'.")
+                        break
                     temp_training = TimeSeriesDataSet(
                         df_input,
                         time_idx="time_idx",
