@@ -44,9 +44,15 @@ def validate_new_dataset(data, required_columns=['date', 'title', 'views', 'day_
 @st.cache_data
 def load_train_data():
     import gdown
+    import os
+
     data_path = "Crawl(2)/Crawl_ca_nam_long/Crawl_full_views_ca_nam_batch_1.csv"
+    # Tạo thư mục nếu chưa tồn tại
+    os.makedirs(os.path.dirname(data_path) or ".", exist_ok=True)
+    
     if not os.path.exists(data_path):
         gdown.download("https://drive.google.com/uc?id=1oFawwh82xWDNBTpL58nu5haAD2f5vGtP", data_path, quiet=False)
+    
     data = pd.read_csv(data_path)
     data['date'] = pd.to_datetime(data['date'])
     data['time_idx'] = (data['date'] - data['date'].min()).dt.days
