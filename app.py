@@ -104,7 +104,7 @@ def load_tft_model(title, data, forecast_days):
     if os.path.exists(model_path):
         try:
             state_dict = torch.load(model_path, map_location=torch.device('cpu'))
-            # Loại bỏ các khóa không mong muốn nếu có
+            # Lọc các khóa không khớp
             state_dict = {k: v for k, v in state_dict.items() if k in tft.state_dict()}
             tft.load_state_dict(state_dict, strict=False)
             logger.info("Đã tải mô hình TFT đại diện thành công (bỏ qua các khóa không khớp)")
@@ -192,8 +192,8 @@ else:
     title = None
     st.warning("Vui lòng tải lên file CSV để tiếp tục.")
 
-# Chọn số ngày dự báo
-forecast_days = st.slider("Chọn số ngày dự báo (tối đa 30 ngày):", 1, 30, 7)
+# Chọn số ngày dự báo (đảm bảo slider hiển thị)
+forecast_days = st.slider("Chọn số ngày dự báo (tối đa 30 ngày):", min_value=1, max_value=30, value=7, step=1)
 
 # Dự báo
 if st.button("Dự báo") and data is not None and title is not None:
