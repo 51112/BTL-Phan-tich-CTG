@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import joblib
 import torch
-import pmdarima as pm
 from pytorch_forecasting import TemporalFusionTransformer, TimeSeriesDataSet
 from pytorch_forecasting.data import GroupNormalizer
 import plotly.graph_objects as go
@@ -66,31 +65,6 @@ def load_results_file(file_name):
         logger.error(f"Lỗi khi đọc file {file_name}: {str(e)}")
         st.error(f"Lỗi khi đọc file {file_name}: {str(e)}")
         return None
-
-# Hàm tải mô hình ARIMA
-@st.cache_resource
-def load_arima_model(title):
-    logger.info(f"Tải mô hình ARIMA cho title: {title}")
-    model_path = "representative_arima.pkl"
-    if os.path.exists(model_path):
-        try:
-            model = joblib.load(model_path)
-            # Kiểm tra xem mô hình có từ pmdarima không
-            if hasattr(model, 'predict'):
-                logger.info("Đã tải mô hình ARIMA đại diện thành công")
-                st.warning(f"Sử dụng mô hình ARIMA đại diện cho {title}.")
-                return model
-            else:
-                logger.error("Mô hình ARIMA không hợp lệ hoặc không phải từ pmdarima")
-                st.error("Mô hình ARIMA không hợp lệ hoặc không phải từ pmdarima")
-                return None
-        except Exception as e:
-            logger.error(f"Lỗi khi tải mô hình ARIMA: {str(e)}")
-            st.error(f"Lỗi khi tải mô hình ARIMA: {str(e)}")
-            return None
-    logger.error("Không tìm thấy mô hình ARIMA đại diện")
-    st.error("Không tìm thấy mô hình ARIMA đại diện")
-    return None
 
 # Hàm tải mô hình TFT
 @st.cache_resource
@@ -239,20 +213,9 @@ if st.button("Dự báo") and data is not None and title is not None:
         df_three_months = df_title[(df_title.index >= two_months_ago_start) & (df_title.index <= end_date)]
         df_last_month = df_title[(df_title.index >= last_month_start) & (df_title.index <= end_date)]
 
-        # ARIMA
-        try:
-            arima_model = load_arima_model(title)
-            if arima_model:
-                arima_forecast = arima_model.predict(n_periods=31)  # Dự báo 31 ngày
-                arima_forecast = np.maximum(arima_forecast, 0)
-                logger.info("Dự báo ARIMA thành công")
-            else:
-                arima_forecast = np.zeros(31)
-                logger.warning("Không có mô hình ARIMA, sử dụng dự báo mặc định (0)")
-        except Exception as e:
-            logger.error(f"Lỗi khi dự báo ARIMA: {str(e)}")
-            st.error(f"Lỗi khi dự báo ARIMA: {str(e)}")
-            arima_forecast = np.zeros(31)
+        # ARIMA (tạm thời bỏ qua, sử dụng giá trị mặc định)
+        arima_forecast = np.zeros(31)
+        logger.warning("Mô hình ARIMA bị vô hiệu hóa do lỗi pmdarima, sử dụng dự báo mặc định (0)")
 
         # TFT
         try:
