@@ -55,7 +55,11 @@ def validate_new_dataset(data, required_columns=['date', 'title', 'views', 'day_
     # Chuyển đổi các cột số sang kiểu dữ liệu phù hợp
     for col in ['views', 'day_of_week', 'month', 'quarter', 'tfidf_score']:
         data[col] = pd.to_numeric(data[col], errors='coerce').fillna(0).astype(float)
-    data['time_idx'] = pd.to_numeric(data['time_idx'], errors='coerce').fillna(0).astype(int)
+    # Tạo cột time_idx nếu chưa có
+    if 'time_idx' not in data.columns:
+        data['time_idx'] = (pd.to_datetime(data['date']) - pd.to_datetime(data['date']).min()).dt.days.astype(int)
+    else:
+        data['time_idx'] = pd.to_numeric(data['time_idx'], errors='coerce').fillna(0).astype(int)
     logger.info("Dataset mới hợp lệ")
     return True
 
@@ -174,7 +178,8 @@ st.write("Tải lên dataset mới (chỉ chứa 1 title) để dự báo lượ
 uploaded_file = st.file_uploader("Tải lên file CSV (chứa 1 title)", type=["csv"])
 if uploaded_file is not None:
     try:
-        data = pd.read_csv(uploaded_file, dtype={'views': float, 'day_of_week': float, 'month': float, 'quarter': float, 'tfidf_score': float, 'time_idx': int})
+        # Đọc file CSV mà không ép kiểu ngay, sau đó xử lý
+        data = pd.read_csv(uploaded_file)
         if validate_new_dataset(data):
             data['time_idx'] = (pd.to_datetime(data['date']) - pd.to_datetime(data['date']).min()).dt.days.astype(int)
             data.fillna(0, inplace=True)
@@ -186,7 +191,7 @@ if uploaded_file is not None:
             title = None
     except Exception as e:
         logger.error(f"Lỗi khi đọc file CSV mới: {str(e)}")
-        st.error(f"Lỗi khi đọc file CSV mới: {str(e)}")
+        st.error(f"Lỗi khi đọc file CSV mới: {str(e)}. Vui lòng kiểm tra file CSV (các cột yêu cầu: date, title, views, day_of_week, month, quarter, tfidf_score).")
         data = None
         title = None
 else:
