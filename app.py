@@ -55,11 +55,9 @@ def validate_new_dataset(data, required_columns=['date', 'title', 'views', 'day_
     # Chuyển đổi các cột số sang kiểu dữ liệu phù hợp
     for col in ['views', 'day_of_week', 'month', 'quarter', 'tfidf_score']:
         data[col] = pd.to_numeric(data[col], errors='coerce').fillna(0).astype(float)
-    # Tạo cột time_idx nếu chưa có
-    if 'time_idx' not in data.columns:
-        data['time_idx'] = (pd.to_datetime(data['date']) - pd.to_datetime(data['date']).min()).dt.days.astype(int)
-    else:
-        data['time_idx'] = pd.to_numeric(data['time_idx'], errors='coerce').fillna(0).astype(int)
+    # Tạo time_idx từ date
+    data = data.sort_values('date')
+    data['time_idx'] = (data['date'] - data['date'].min()).dt.days
     logger.info("Dataset mới hợp lệ")
     return True
 
@@ -86,7 +84,9 @@ def load_tft_model(title, data, forecast_days):
     # Chuyển đổi kiểu dữ liệu, đảm bảo tất cả cột là số
     for col in ['views', 'day_of_week', 'month', 'quarter', 'tfidf_score']:
         data[col] = pd.to_numeric(data[col], errors='coerce').fillna(0).astype(float)
-    data['time_idx'] = pd.to_numeric(data['time_idx'], errors='coerce').fillna(0).astype(int)
+    # Sử dụng date để tạo time_idx
+    data = data.sort_values('date')
+    data['time_idx'] = (data['date'] - data['date'].min()).dt.days
     training = TimeSeriesDataSet(
         data,
         time_idx="time_idx",
@@ -178,10 +178,9 @@ st.write("Tải lên dataset mới (chỉ chứa 1 title) để dự báo lượ
 uploaded_file = st.file_uploader("Tải lên file CSV (chứa 1 title)", type=["csv"])
 if uploaded_file is not None:
     try:
-        # Đọc file CSV mà không ép kiểu ngay, sau đó xử lý
         data = pd.read_csv(uploaded_file)
         if validate_new_dataset(data):
-            data['time_idx'] = (pd.to_datetime(data['date']) - pd.to_datetime(data['date']).min()).dt.days.astype(int)
+            data['time_idx'] = (data['date'] - data['date'].min()).dt.days
             data.fillna(0, inplace=True)
             title = data['title'].iloc[0]
             st.success(f"Dataset mới đã được tải với title: {title}")
@@ -245,7 +244,7 @@ if st.button("Dự báo") and data is not None and title is not None:
                 for _ in range(steps):
                     for col in ['views', 'day_of_week', 'month', 'quarter', 'tfidf_score']:
                         df_input[col] = pd.to_numeric(df_input[col], errors='coerce').fillna(0).astype(float)
-                    df_input['time_idx'] = pd.to_numeric(df_input['time_idx'], errors='coerce').fillna(0).astype(int)
+                    df_input['time_idx'] = (pd.to_datetime(df_input['date']) - pd.to_datetime(df_input['date']).min()).dt.days
                     temp_training = TimeSeriesDataSet(
                         df_input,
                         time_idx="time_idx",
@@ -277,7 +276,7 @@ if st.button("Dự báo") and data is not None and title is not None:
                     tft_forecast.extend(predictions)
 
                     if len(tft_forecast) < forecast_days:
-                        last_date = df_input['date'].max()
+                        last_date = pd.to_datetime(df_input['date'].max())
                         new_dates = pd.date_range(start=last_date + timedelta(days=1), periods=min(7, forecast_days - len(tft_forecast)), freq='D')
                         last_tfidf = float(df_input['tfidf_score'].iloc[-1])
                         last_time_idx = df_input['time_idx'].max()
