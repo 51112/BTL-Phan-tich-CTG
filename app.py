@@ -378,6 +378,7 @@ if st.button("Dự báo") and data is not None and title is not None:
         ))
 
         forecast_dates = pd.date_range(start=df_three_months['date'].max() + timedelta(days=1), periods=forecast_days, freq='D')
+        forecast_dates_numeric = (forecast_dates - pd.Timestamp("1970-01-01")) // pd.Timedelta('1s')  # Chuyển sang timestamp số (giây)
 
         fig.add_trace(go.Scatter(
             x=[df_three_months['date'].max()] + list(forecast_dates),
@@ -407,9 +408,9 @@ if st.button("Dự báo") and data is not None and title is not None:
         ))
 
         if forecast_days >= 30:
-            fig.add_vline(x=forecast_dates[0], line_dash="dash", line_color="gray", annotation_text="1 ngày")
-            fig.add_vline(x=forecast_dates[6], line_dash="dash", line_color="gray", annotation_text="7 ngày")
-            fig.add_vline(x=forecast_dates[29], line_dash="dash", line_color="gray", annotation_text="30 ngày")
+            fig.add_vline(x=forecast_dates_numeric[0], line_dash="dash", line_color="gray", annotation_text="1 ngày")
+            fig.add_vline(x=forecast_dates_numeric[6], line_dash="dash", line_color="gray", annotation_text="7 ngày")
+            fig.add_vline(x=forecast_dates_numeric[29], line_dash="dash", line_color="gray", annotation_text="30 ngày")
 
         fig.update_layout(
             title=f"Dữ liệu thực tế 3 tháng cuối 2024 và dự báo {forecast_days} ngày cho '{title}'",
