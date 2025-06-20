@@ -122,7 +122,14 @@ def load_tft_model(title, data, forecast_days):
     if os.path.exists(model_path):
         try:
             state_dict = torch.load(model_path, map_location=torch.device('cpu'))
-            state_dict = {k: v for k, v in state_dict.items() if k in tft.state_dict()}
+            # Lọc các khóa khớp với mô hình hiện tại
+            model_dict = tft.state_dict()
+            state_dict = {k: v for k, v in state_dict.items() if k in model_dict and v.size() == model_dict[k].size()}
+            missing_keys = [k for k in model_dict.keys() if k not in state_dict]
+            unexpected_keys = [k for k in state_dict.keys() if k not in model_dict]
+            if missing_keys or unexpected_keys:
+                logger.warning(f"Missing keys: {missing_keys}, Unexpected keys: {unexpected_keys}")
+                st.warning("Một số tham số không khớp khi tải mô hình TFT. Sử dụng các tham số khả dụng.")
             tft.load_state_dict(state_dict, strict=False)
             logger.info("Đã tải mô hình TFT đại diện thành công (bỏ qua các khóa không khớp)")
             st.warning(f"Sử dụng mô hình TFT đại diện cho {title} (có thể không hoàn toàn khớp cấu trúc).")
@@ -258,7 +265,7 @@ if st.button("Dự báo") and data is not None and title is not None:
                         df_input[col] = pd.to_numeric(df_input[col], errors='coerce').fillna(0).astype(float)
                     # Tạo time_idx từ date
                     df_input = df_input.sort_values('date')
-                    df_input['time_idx'] = (pd.to_datetime(df_input['date']) - pd.to_datetime(df_input['date']).min()).dt.days
+                    df_input['time_idx'] = (pd.to_datetime(df_input['date']) - pd.to_datetime(df_input['date'].min())).dt.days
                     if df_input['time_idx'].isna().any():
                         logger.error("Cột 'time_idx' chứa giá trị NaN trong dự báo TFT.")
                         st.error("Cột 'time_idx' chứa giá trị NaN. Vui lòng kiểm tra cột 'date'.")
