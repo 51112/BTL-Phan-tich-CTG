@@ -75,9 +75,15 @@ def load_arima_model(title):
     if os.path.exists(model_path):
         try:
             model = joblib.load(model_path)
-            logger.info("Đã tải mô hình ARIMA đại diện thành công")
-            st.warning(f"Sử dụng mô hình ARIMA đại diện cho {title}.")
-            return model
+            # Kiểm tra xem mô hình có từ pmdarima không
+            if hasattr(model, 'predict'):
+                logger.info("Đã tải mô hình ARIMA đại diện thành công")
+                st.warning(f"Sử dụng mô hình ARIMA đại diện cho {title}.")
+                return model
+            else:
+                logger.error("Mô hình ARIMA không hợp lệ hoặc không phải từ pmdarima")
+                st.error("Mô hình ARIMA không hợp lệ hoặc không phải từ pmdarima")
+                return None
         except Exception as e:
             logger.error(f"Lỗi khi tải mô hình ARIMA: {str(e)}")
             st.error(f"Lỗi khi tải mô hình ARIMA: {str(e)}")
