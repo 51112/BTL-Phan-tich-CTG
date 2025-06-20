@@ -52,6 +52,10 @@ def validate_new_dataset(data, required_columns=['date', 'title', 'views', 'day_
     except Exception as e:
         st.error(f"Lỗi khi chuyển đổi cột 'date' sang định dạng datetime: {str(e)}")
         return False
+    # Chuyển đổi các cột số sang kiểu dữ liệu phù hợp
+    for col in ['views', 'day_of_week', 'month', 'quarter', 'tfidf_score']:
+        data[col] = pd.to_numeric(data[col], errors='coerce').fillna(0).astype(float)
+    data['time_idx'] = pd.to_numeric(data['time_idx'], errors='coerce').fillna(0).astype(int)
     logger.info("Dataset mới hợp lệ")
     return True
 
@@ -87,7 +91,7 @@ def load_tft_model(title, data, forecast_days):
         allow_missing_timesteps=True,
         min_encoder_length=15,
         max_encoder_length=30,
-        max_prediction_length=forecast_days,  # Điều chỉnh theo số ngày dự báo
+        max_prediction_length=forecast_days,
         static_categoricals=["title"],
         time_varying_known_reals=["day_of_week", "month", "quarter", "tfidf_score"],
         time_varying_unknown_reals=["views"],
@@ -104,7 +108,6 @@ def load_tft_model(title, data, forecast_days):
     if os.path.exists(model_path):
         try:
             state_dict = torch.load(model_path, map_location=torch.device('cpu'))
-            # Lọc các khóa không khớp
             state_dict = {k: v for k, v in state_dict.items() if k in tft.state_dict()}
             tft.load_state_dict(state_dict, strict=False)
             logger.info("Đã tải mô hình TFT đại diện thành công (bỏ qua các khóa không khớp)")
@@ -133,7 +136,7 @@ def load_informer_model(title, forecast_days):
         c_out=1,
         seq_len=30,
         label_len=15,
-        out_len=forecast_days,  # Điều chỉnh theo số ngày dự báo
+        out_len=forecast_days,
         d_model=256,
         n_heads=4,
         e_layers=1,
@@ -171,9 +174,8 @@ st.write("Tải lên dataset mới (chỉ chứa 1 title) để dự báo lượ
 uploaded_file = st.file_uploader("Tải lên file CSV (chứa 1 title)", type=["csv"])
 if uploaded_file is not None:
     try:
-        data = pd.read_csv(uploaded_file)
+        data = pd.read_csv(uploaded_file, dtype={'views': float, 'day_of_week': float, 'month': float, 'quarter': float, 'tfidf_score': float, 'time_idx': int})
         if validate_new_dataset(data):
-            # Tính time_idx và đảm bảo là int
             data['time_idx'] = (pd.to_datetime(data['date']) - pd.to_datetime(data['date']).min()).dt.days.astype(int)
             data.fillna(0, inplace=True)
             title = data['title'].iloc[0]
@@ -192,7 +194,7 @@ else:
     title = None
     st.warning("Vui lòng tải lên file CSV để tiếp tục.")
 
-# Chọn số ngày dự báo (đảm bảo slider hiển thị)
+# Chọn số ngày dự báo
 forecast_days = st.slider("Chọn số ngày dự báo (tối đa 30 ngày):", min_value=1, max_value=30, value=7, step=1)
 
 # Dự báo
@@ -205,27 +207,25 @@ if st.button("Dự báo") and data is not None and title is not None:
         'month': 'mean',
         'quarter': 'mean',
         'tfidf_score': 'mean',
-        'time_idx': 'first',  # Giữ time_idx đầu tiên
-        'title': 'first'      # Giữ title đầu tiên
+        'time_idx': 'first',
+        'title': 'first'
     }).reset_index()
     df_title.set_index('date', inplace=True)
     
-    # Kiểm tra trùng lặp trong index
     if df_title.index.duplicated().any():
         logger.error("Index 'date' vẫn chứa giá trị trùng lặp sau khi tổng hợp")
         st.error("Dữ liệu có ngày trùng lặp không thể xử lý. Vui lòng kiểm tra file CSV.")
     else:
-        # Đặt tần suất hàng ngày và điền giá trị thiếu
         df_title = df_title.asfreq('D', fill_value=0)
 
-        # Lấy 3 tháng cuối năm 2024 (10/2024, 11/2024, 12/2024)
+        # Lấy 3 tháng cuối năm 2024
         end_date = pd.to_datetime('2024-12-31')
         last_month_start = pd.to_datetime('2024-11-01')
         two_months_ago_start = pd.to_datetime('2024-10-01')
         df_three_months = df_title[(df_title.index >= two_months_ago_start) & (df_title.index <= end_date)]
         df_last_month = df_title[(df_title.index >= last_month_start) & (df_title.index <= end_date)]
 
-        # ARIMA (tạm thời bỏ qua, sử dụng giá trị mặc định)
+        # ARIMA (tạm thời bỏ qua)
         arima_forecast = np.zeros(forecast_days)
         logger.warning("Mô hình ARIMA bị vô hiệu hóa do lỗi pmdarima, sử dụng dự báo mặc định (0)")
 
@@ -238,8 +238,9 @@ if st.button("Dự báo") and data is not None and title is not None:
                 steps = (forecast_days // 7) + (1 if forecast_days % 7 else 0)
 
                 for _ in range(steps):
-                    for col in ['views', 'day_of_week', 'month', 'quarter', 'tfidf_score', 'time_idx']:
-                        df_input[col] = pd.to_numeric(df_input[col], errors='coerce').fillna(0).astype(float) if col != 'time_idx' else pd.to_numeric(df_input[col], errors='coerce').fillna(0).astype(int)
+                    for col in ['views', 'day_of_week', 'month', 'quarter', 'tfidf_score']:
+                        df_input[col] = pd.to_numeric(df_input[col], errors='coerce').fillna(0).astype(float)
+                    df_input['time_idx'] = pd.to_numeric(df_input['time_idx'], errors='coerce').fillna(0).astype(int)
                     temp_training = TimeSeriesDataSet(
                         df_input,
                         time_idx="time_idx",
@@ -328,11 +329,10 @@ if st.button("Dự báo") and data is not None and title is not None:
             st.error(f"Lỗi khi dự báo Informer: {str(e)}")
             informer_forecast = np.zeros(forecast_days)
 
-        # Trực quan hóa 3 tháng cuối và dự báo
+        # Trực quan hóa
         st.subheader(f"So sánh dữ liệu thực tế 3 tháng cuối 2024 và dự báo {forecast_days} ngày")
         fig = go.Figure()
 
-        # Dữ liệu thực tế 3 tháng cuối (10/2024 - 12/2024)
         fig.add_trace(go.Scatter(
             x=df_three_months.index,
             y=df_three_months['views'],
@@ -342,10 +342,8 @@ if st.button("Dự báo") and data is not None and title is not None:
             marker=dict(size=4)
         ))
 
-        # Dự báo ngày
         forecast_dates = pd.date_range(start=end_date + timedelta(days=1), periods=forecast_days, freq='D')
 
-        # ARIMA
         fig.add_trace(go.Scatter(
             x=[end_date] + list(forecast_dates),
             y=[df_last_month['views'].iloc[-1]] + list(arima_forecast),
@@ -355,7 +353,6 @@ if st.button("Dự báo") and data is not None and title is not None:
             marker=dict(size=4)
         ))
 
-        # TFT
         fig.add_trace(go.Scatter(
             x=[end_date] + list(forecast_dates),
             y=[df_last_month['views'].iloc[-1]] + list(tft_forecast),
@@ -365,7 +362,6 @@ if st.button("Dự báo") and data is not None and title is not None:
             marker=dict(size=4)
         ))
 
-        # Informer
         fig.add_trace(go.Scatter(
             x=[end_date] + list(forecast_dates),
             y=[df_last_month['views'].iloc[-1]] + list(informer_forecast),
@@ -375,13 +371,11 @@ if st.button("Dự báo") and data is not None and title is not None:
             marker=dict(size=4)
         ))
 
-        # Thêm 3 mốc thời gian (1, 7, 30 ngày) dưới dạng đường thẳng đứng
         if forecast_days >= 30:
             fig.add_vline(x=pd.to_datetime('2025-01-01') + timedelta(days=0), line_dash="dash", line_color="gray", annotation_text="1 ngày")
             fig.add_vline(x=pd.to_datetime('2025-01-01') + timedelta(days=6), line_dash="dash", line_color="gray", annotation_text="7 ngày")
             fig.add_vline(x=pd.to_datetime('2025-01-01') + timedelta(days=29), line_dash="dash", line_color="gray", annotation_text="30 ngày")
 
-        # Cấu hình biểu đồ
         fig.update_layout(
             title=f"Dữ liệu thực tế 3 tháng cuối 2024 và dự báo {forecast_days} ngày cho '{title}'",
             xaxis_title="Ngày",
@@ -389,28 +383,14 @@ if st.button("Dự báo") and data is not None and title is not None:
             template="plotly_white",
             hovermode="x unified",
             showlegend=True,
-            xaxis=dict(
-                gridcolor="lightgray",
-                showgrid=True,
-                tickformat="%Y-%m-%d"
-            ),
-            yaxis=dict(
-                gridcolor="lightgray",
-                showgrid=True,
-                zeroline=True
-            ),
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="center",
-                x=0.5
-            )
+            xaxis=dict(gridcolor="lightgray", showgrid=True, tickformat="%Y-%m-%d"),
+            yaxis=dict(gridcolor="lightgray", showgrid=True, zeroline=True),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
         )
 
         st.plotly_chart(fig, use_container_width=True)
 
-        # Hiển thị kết quả đánh giá (dựa trên mô hình đại diện)
+        # Hiển thị kết quả đánh giá
         st.subheader("Kết quả đánh giá mô hình (dựa trên mô hình đại diện)")
         try:
             arima_results = load_results_file("arima_results.csv")
