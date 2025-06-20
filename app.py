@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import joblib
 import torch
-import gdown  # Đảm bảo import gdown
+import gdown
 from pytorch_forecasting import TemporalFusionTransformer, TimeSeriesDataSet
 from pytorch_forecasting.data import GroupNormalizer
 import plotly.graph_objects as go
@@ -12,10 +12,11 @@ import sys
 import re
 from sklearn.preprocessing import StandardScaler
 from datetime import timedelta
+import logging
 
-# Thêm thư mục Informer2020 vào sys.path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'Informer2020')))
-from Informer2020.models.model import Informer
+# Thiết lập logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Hàm làm sạch tên file
 def clean_filename(filename):
@@ -23,8 +24,31 @@ def clean_filename(filename):
     cleaned = re.sub(r'\s+', '_', cleaned.strip())
     return cleaned
 
+# Hàm tải file từ Google Drive
+def download_model_from_drive(url, output_path):
+    logger.info(f"Tải file từ Google Drive: {url}")
+    try:
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        gdown.download(url, output_path, quiet=False)
+        logger.info(f"Đã tải file: {output_path}")
+    except Exception as e:
+        logger.error(f"Lỗi khi tải file từ Google Drive: {str(e)}")
+        st.error(f"Lỗi khi tải file từ Google Drive: {str(e)}")
+        raise
+
+# Thêm đường dẫn Informer2020 và import
+try:
+    sys.path.append(os.path.abspath("Informer2020"))
+    from Informer2020.models.model import Informer
+    logger.info("Đã import thành công mô hình Informer")
+except Exception as e:
+    logger.error(f"Lỗi khi import Informer: {str(e)}")
+    st.error(f"Lỗi khi import Informer: {str(e)}")
+    Informer = None
+
 # Hàm kiểm tra tính hợp lệ của dataset mới
 def validate_new_dataset(data, required_columns=['date', 'title', 'views', 'day_of_week', 'month', 'quarter', 'tfidf_score']):
+    logger.info("Kiểm tra tính hợp lệ của dataset mới...")
     if not all(col in data.columns for col in required_columns):
         missing_cols = [col for col in required_columns if col not in data.columns]
         st.error(f"Dataset mới thiếu các cột bắt buộc: {missing_cols}")
@@ -40,49 +64,167 @@ def validate_new_dataset(data, required_columns=['date', 'title', 'views', 'day_
     except Exception as e:
         st.error(f"Lỗi khi chuyển đổi cột 'date' sang định dạng datetime: {str(e)}")
         return False
+    logger.info("Dataset mới hợp lệ")
     return True
 
 # Hàm tải dữ liệu train
 @st.cache_data
 def load_train_data():
+    logger.info("Bắt đầu tải dữ liệu train...")
     data_path = "Data/Crawl_ca_nam_long/Crawl_full_views_ca_nam_batch_1.parquet"
     google_drive_url = "https://drive.google.com/uc?id=1k085xNl3Kls5OuL8O8HrhPjdwIFs_Ytv&confirm=t"
     
     if not os.path.exists(data_path):
-        st.info(f"File {data_path} không tồn tại cục bộ. Đang tải từ Google Drive...")
+        logger.info(f"Tải file từ Google Drive: {google_drive_url}")
         for attempt in range(3):
             try:
                 os.makedirs(os.path.dirname(data_path), exist_ok=True)
                 gdown.download(google_drive_url, data_path, quiet=False)
-                # Kiểm tra file Parquet ngay sau khi tải
                 pd.read_parquet(data_path)
-                st.success(f"Đã tải và xác nhận file Parquet tại {data_path}")
+                logger.info(f"Đã tải và xác nhận file Parquet tại {data_path}")
                 break
-            except gdown.exceptions.FileURLRetrievalError as e:
-                st.warning(f"Lỗi tải file từ Google Drive, thử lại lần {attempt+1}/3...")
-                time.sleep(60)
-                if attempt == 2:
-                    st.error("Không thể tải file sau 3 lần thử. Vui lòng kiểm tra URL hoặc liên hệ quản trị viên.")
-                    return None
             except Exception as e:
-                st.error(f"Lỗi khi tải hoặc kiểm tra file Parquet: {str(e)}")
-                return None
+                logger.warning(f"Lỗi tải file, thử lại lần {attempt+1}/3: {str(e)}")
+                if attempt == 2:
+                    logger.error("Không thể tải file sau 3 lần thử")
+                    st.error("Không thể tải file dữ liệu. Vui lòng kiểm tra URL hoặc liên hệ quản trị viên.")
+                    return None
     
     try:
         data = pd.read_parquet(data_path)
         if not isinstance(data, pd.DataFrame):
+            logger.error("Dữ liệu không phải DataFrame Pandas!")
             st.error("Dữ liệu không phải DataFrame Pandas!")
             return None
         if 'title' not in data.columns:
+            logger.error(f"File Parquet không chứa cột 'title'. Cột hiện có: {data.columns.tolist()}")
             st.error(f"File Parquet không chứa cột 'title'. Cột hiện có: {data.columns.tolist()}")
             return None
         data['date'] = pd.to_datetime(data['date'])
         data['time_idx'] = (data['date'] - data['date'].min()).dt.days
         data.fillna(0, inplace=True)
+        logger.info(f"Đã tải dữ liệu train: {data.shape}")
         return data
     except Exception as e:
+        logger.error(f"Lỗi khi đọc file Parquet: {str(e)}")
         st.error(f"Lỗi khi đọc file Parquet: {str(e)}")
         return None
+
+# Hàm tải file kết quả đánh giá
+@st.cache_data
+def load_results_file(file_name):
+    logger.info(f"Tải file kết quả: {file_name}")
+    try:
+        return pd.read_csv(file_name)
+    except Exception as e:
+        logger.error(f"Lỗi khi đọc file {file_name}: {str(e)}")
+        st.error(f"Lỗi khi đọc file {file_name}: {str(e)}")
+        return None
+
+# Hàm tải mô hình ARIMA
+@st.cache_resource
+def load_arima_model(title, data):
+    logger.info(f"Tải mô hình ARIMA cho title: {title}")
+    model_path = "representative_arima.pkl"
+    if os.path.exists(model_path):
+        try:
+            model = joblib.load(model_path)
+            logger.info("Đã tải mô hình ARIMA đại diện thành công")
+            st.warning(f"Sử dụng mô hình ARIMA đại diện cho {title}.")
+            return model
+        except Exception as e:
+            logger.error(f"Lỗi khi tải mô hình ARIMA: {str(e)}")
+            st.error(f"Lỗi khi tải mô hình ARIMA: {str(e)}")
+            return None
+    logger.error("Không tìm thấy mô hình ARIMA đại diện")
+    st.error("Không tìm thấy mô hình ARIMA đại diện")
+    return None
+
+# Hàm tải mô hình TFT
+@st.cache_resource
+def load_tft_model(title, data):
+    logger.info(f"Tải mô hình TFT cho title: {title}")
+    model_path = "representative_tft.pt"
+    df_title = data[data['title'] == title].copy()
+    if len(df_title) < 15:
+        logger.error(f"Dữ liệu cho {title} không đủ (yêu cầu tối thiểu 15 dòng)")
+        st.error(f"Dữ liệu cho {title} không đủ để tạo TimeSeriesDataSet (yêu cầu tối thiểu 15 dòng).")
+        return None, None
+    training = TimeSeriesDataSet(
+        df_title,
+        time_idx="time_idx",
+        target="views",
+        group_ids=["title"],
+        allow_missing_timesteps=True,
+        min_encoder_length=15,
+        max_encoder_length=30,
+        max_prediction_length=7,
+        static_categoricals=["title"],
+        time_varying_known_reals=["day_of_week", "month", "quarter", "tfidf_score"],
+        time_varying_unknown_reals=["views"],
+        target_normalizer=GroupNormalizer(groups=["title"], transformation="softplus")
+    )
+    tft = TemporalFusionTransformer.from_dataset(
+        training,
+        hidden_size=32,
+        attention_head_size=2,
+        dropout=0.2,
+        hidden_continuous_size=16,
+        output_size=1
+    )
+    if os.path.exists(model_path):
+        try:
+            tft.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
+            logger.info("Đã tải mô hình TFT đại diện thành công")
+            st.warning(f"Sử dụng mô hình TFT đại diện cho {title}.")
+            return tft, training
+        except Exception as e:
+            logger.error(f"Lỗi khi tải mô hình TFT: {str(e)}")
+            st.error(f"Lỗi khi tải mô hình TFT: {str(e)}")
+            return None, None
+    logger.error("Không tìm thấy mô hình TFT đại diện")
+    st.error("Không tìm thấy mô hình TFT đại diện")
+    return None, None
+
+# Hàm tải mô hình Informer
+@st.cache_resource
+def load_informer_model(title, data):
+    logger.info(f"Tải mô hình Informer cho title: {title}")
+    if Informer is None:
+        logger.error("Không thể sử dụng mô hình Informer do lỗi import")
+        st.error("Không thể sử dụng mô hình Informer do lỗi import")
+        return None
+    model_path = "representative_informer.pt"
+    model = Informer(
+        enc_in=5,
+        dec_in=5,
+        c_out=1,
+        seq_len=30,
+        label_len=15,
+        out_len=7,
+        d_model=256,
+        n_heads=4,
+        e_layers=1,
+        d_layers=1,
+        d_ff=1024,
+        dropout=0.1,
+        attn='prob',
+        embed='timeF',
+        freq='d'
+    )
+    if os.path.exists(model_path):
+        try:
+            model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
+            logger.info("Đã tải mô hình Informer đại diện thành công")
+            st.warning(f"Sử dụng mô hình Informer đại diện cho {title}.")
+            return model
+        except Exception as e:
+            logger.error(f"Lỗi khi tải mô hình Informer: {str(e)}")
+            st.error(f"Lỗi khi tải mô hình Informer: {str(e)}")
+            return None
+    logger.error("Không tìm thấy mô hình Informer đại diện")
+    st.error("Không tìm thấy mô hình Informer đại diện")
+    return None
 
 # Giao diện Streamlit
 st.title("Dự báo lượt truy cập Website")
@@ -115,6 +257,7 @@ else:
                 new_data = None
                 title = None
         except Exception as e:
+            logger.error(f"Lỗi khi đọc file CSV mới: {str(e)}")
             st.error(f"Lỗi khi đọc file CSV mới: {str(e)}")
             new_data = None
             title = None
@@ -123,131 +266,11 @@ else:
         title = None
         st.warning("Vui lòng tải lên file CSV để tiếp tục.")
 
-forecast_days = 30  
-
-# Hàm tải mô hình ARIMA
-@st.cache_resource
-def load_arima_model(title, data):
-    safe_title = clean_filename(title)
-    idx = data[data['title'] == title].index[0] if data_option == "Dữ liệu đã train" else 0
-    model_path = f"arima_{idx+1}_{safe_title}.pkl"
-    if os.path.exists(model_path):
-        try:
-            model = joblib.load(model_path)
-            return model
-        except Exception as e:
-            st.error(f"Lỗi khi tải mô hình ARIMA cho {title}: {str(e)}")
-            return None
-    else:
-        rep_model_path = "representative_arima.pkl"
-        if os.path.exists(rep_model_path):
-            try:
-                model = joblib.load(rep_model_path)
-                st.warning(f"Sử dụng mô hình ARIMA đại diện cho {title} vì không tìm thấy mô hình riêng.")
-                return model
-            except Exception as e:
-                st.error(f"Lỗi khi tải mô hình ARIMA đại diện cho {title}: {str(e)}")
-                return None
-        st.error(f"Không tìm thấy mô hình ARIMA cho {title} hoặc mô hình đại diện.")
-        return None
-
-# Hàm tải mô hình TFT
-@st.cache_resource
-def load_tft_model(title, data):
-    safe_title = clean_filename(title)
-    idx = data[data['title'] == title].index[0] if data_option == "Dữ liệu đã train" else 0
-    model_path = f"tft_{idx+1}_{safe_title}.pt"
-    df_title = data[data['title'] == title].copy()
-    if len(df_title) < 15:
-        st.error(f"Dữ liệu cho {title} không đủ để tạo TimeSeriesDataSet (yêu cầu tối thiểu 15 dòng).")
-        return None, None
-    training = TimeSeriesDataSet(
-        df_title,
-        time_idx="time_idx",
-        target="views",
-        group_ids=["title"],
-        allow_missing_timesteps=True,
-        min_encoder_length=15,
-        max_encoder_length=30,
-        max_prediction_length=7,
-        static_categoricals=["title"],
-        time_varying_known_reals=["day_of_week", "month", "quarter", "tfidf_score"],
-        time_varying_unknown_reals=["views"],
-        target_normalizer=GroupNormalizer(groups=["title"], transformation="softplus")
-    )
-    tft = TemporalFusionTransformer.from_dataset(
-        training,
-        hidden_size=32,
-        attention_head_size=2,
-        dropout=0.2,
-        hidden_continuous_size=16,
-        output_size=1
-    )
-    if os.path.exists(model_path):
-        try:
-            tft.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
-            return tft, training
-        except Exception as e:
-            st.error(f"Lỗi khi tải mô hình TFT cho {title}: {str(e)}")
-            return None, None
-    else:
-        rep_model_path = "representative_tft.pt"
-        if os.path.exists(rep_model_path):
-            try:
-                tft.load_state_dict(torch.load(rep_model_path, map_location=torch.device('cpu')))
-                st.warning(f"Sử dụng mô hình TFT đại diện cho {title} vì không tìm thấy mô hình riêng.")
-                return tft, training
-            except Exception as e:
-                st.error(f"Lỗi khi tải mô hình TFT đại diện cho {title}: {str(e)}")
-                return None, None
-        st.error(f"Không tìm thấy mô hình TFT cho {title} hoặc mô hình đại diện.")
-        return None, None
-
-# Hàm tải mô hình Informer
-@st.cache_resource
-def load_informer_model(title, data):
-    safe_title = clean_filename(title)
-    idx = data[data['title'] == title].index[0] if data_option == "Dữ liệu đã train" else 0
-    model_path = f"informer_{idx+1}_{safe_title}.pt"
-    model = Informer(
-        enc_in=5,
-        dec_in=5,
-        c_out=1,
-        seq_len=30,
-        label_len=15,
-        out_len=7,
-        d_model=256,
-        n_heads=4,
-        e_layers=1,
-        d_layers=1,
-        d_ff=1024,
-        dropout=0.1,
-        attn='prob',
-        embed='timeF',
-        freq='d'
-    )
-    if os.path.exists(model_path):
-        try:
-            model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
-            return model
-        except Exception as e:
-            st.error(f"Lỗi khi tải mô hình Informer cho {title}: {str(e)}")
-            return None
-    else:
-        rep_model_path = "representative_informer.pt"
-        if os.path.exists(rep_model_path):
-            try:
-                model.load_state_dict(torch.load(rep_model_path, map_location=torch.device('cpu')))
-                st.warning(f"Sử dụng mô hình Informer đại diện cho {title} vì không tìm thấy mô hình riêng.")
-                return model
-            except Exception as e:
-                st.error(f"Lỗi khi tải mô hình Informer đại diện cho {title}: {str(e)}")
-                return None
-        st.error(f"Không tìm thấy mô hình Informer cho {title} hoặc mô hình đại diện.")
-        return None
+forecast_days = 30
 
 # Dự báo
 if st.button("Dự báo") and title is not None:
+    logger.info(f"Bắt đầu dự báo cho title: {title}")
     # Lọc dữ liệu theo title
     df_title = data[data['title'] == title][['date', 'views', 'day_of_week', 'month', 'quarter', 'tfidf_score']].copy()
     
@@ -279,9 +302,12 @@ if st.button("Dự báo") and title is not None:
         if arima_model:
             arima_forecast = arima_model.predict(n_periods=forecast_days)
             arima_forecast = np.maximum(arima_forecast, 0)
+            logger.info("Dự báo ARIMA thành công")
         else:
             arima_forecast = np.zeros(forecast_days)
+            logger.warning("Không có mô hình ARIMA, sử dụng dự báo mặc định (0)")
     except Exception as e:
+        logger.error(f"Lỗi khi dự báo ARIMA: {str(e)}")
         st.error(f"Lỗi khi dự báo ARIMA: {str(e)}")
         arima_forecast = np.zeros(forecast_days)
     
@@ -351,9 +377,12 @@ if st.button("Dự báo") and title is not None:
                     df_input = pd.concat([df_input, new_data], ignore_index=True)
             
             tft_forecast = np.array(tft_forecast[:forecast_days])
+            logger.info("Dự báo TFT thành công")
         else:
             tft_forecast = np.zeros(forecast_days)
+            logger.warning("Không có mô hình TFT, sử dụng dự báo mặc định (0)")
     except Exception as e:
+        logger.error(f"Lỗi khi dự báo TFT: {str(e)}")
         st.error(f"Lỗi khi dự báo TFT: {str(e)}")
         tft_forecast = np.zeros(forecast_days)
     
@@ -378,9 +407,12 @@ if st.button("Dự báo") and title is not None:
             pred_scaled = informer_model(x_enc, x_mark_enc, x_dec, x_mark_dec).squeeze(-1).detach().numpy().squeeze()
             informer_forecast = views_scaler.inverse_transform(pred_scaled.reshape(-1, 1)).flatten()[:forecast_days]
             informer_forecast = np.maximum(informer_forecast, 0)
+            logger.info("Dự báo Informer thành công")
         else:
             informer_forecast = np.zeros(forecast_days)
+            logger.warning("Không có mô hình Informer, sử dụng dự báo mặc định (0)")
     except Exception as e:
+        logger.error(f"Lỗi khi dự báo Informer: {str(e)}")
         st.error(f"Lỗi khi dự báo Informer: {str(e)}")
         informer_forecast = np.zeros(forecast_days)
     
@@ -533,9 +565,9 @@ if st.button("Dự báo") and title is not None:
 if data_option == "Dữ liệu đã train" and title is not None:
     st.subheader("Kết quả đánh giá mô hình")
     try:
-        arima_results = pd.read_csv("arima_results.csv")
-        tft_results = pd.read_csv("tft_results.csv")
-        informer_results = pd.read_csv("informer_results.csv")
+        arima_results = load_results_file("arima_results.csv")
+        tft_results = load_results_file("tft_results.csv")
+        informer_results = load_results_file("informer_results.csv")
         
         arima_mae = arima_results[arima_results['title'] == title]['mae'].values[0] if title in arima_results['title'].values else "N/A"
         arima_mse = arima_results[arima_results['title'] == title]['rmse'].values[0] if title in arima_results['title'].values else "N/A"
@@ -548,6 +580,7 @@ if data_option == "Dữ liệu đã train" and title is not None:
         st.write(f"**TFT** - MAE: {tft_mae:.2f}, RMSE: {tft_rmse:.2f}" if tft_mae != "N/A" else "**TFT** - Không có kết quả đánh giá")
         st.write(f"**Informer** - MAE: {informer_mae:.2f}, RMSE: {informer_mse:.2f}" if informer_mae != "N/A" else "**Informer** - Không có kết quả đánh giá")
     except Exception as e:
+        logger.error(f"Lỗi khi tải kết quả đánh giá: {str(e)}")
         st.error(f"Lỗi khi tải kết quả đánh giá: {str(e)}")
 else:
     st.info("Kết quả đánh giá mô hình không khả dụng cho dataset mới.")
