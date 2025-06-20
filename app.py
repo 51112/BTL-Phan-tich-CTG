@@ -41,40 +41,40 @@ def validate_new_dataset(data, required_columns=['date', 'title', 'views', 'day_
         return False
     return True
 
-import streamlit as st
-import pandas as pd
-import gdown
-import os
-import time
-import io
-
+# Hàm tải dữ liệu train
 @st.cache_data
 def load_train_data():
     data_path = "Data/Crawl_ca_nam_long/Crawl_full_views_ca_nam_batch_1.parquet"
-    google_drive_url = "https://drive.google.com/file/d/1bnzkIs3kTMaIKx7w7HKtaLIruZ4R49_Q/view?usp=sharing"  # Thay bằng ID của file Parquet
+    google_drive_url = "https://drive.google.com/uc?id=1k085xNl3Kls5OuL8O8HrhPjdwIFs_Ytv&confirm=t"
     
-    # Kiểm tra file tồn tại cục bộ
     if not os.path.exists(data_path):
         st.info(f"File {data_path} không tồn tại cục bộ. Đang tải từ Google Drive...")
-        for attempt in range(3):  # Thử tối đa 3 lần
+        for attempt in range(3):
             try:
                 os.makedirs(os.path.dirname(data_path), exist_ok=True)
                 gdown.download(google_drive_url, data_path, quiet=False)
-                st.success(f"Đã tải file Parquet từ Google Drive và lưu tại {data_path}")
+                # Kiểm tra file Parquet ngay sau khi tải
+                pd.read_parquet(data_path)
+                st.success(f"Đã tải và xác nhận file Parquet tại {data_path}")
                 break
             except gdown.exceptions.FileURLRetrievalError as e:
                 st.warning(f"Lỗi tải file từ Google Drive, thử lại lần {attempt+1}/3...")
-                time.sleep(60)  # Chờ 60 giây trước khi thử lại
+                time.sleep(60)
                 if attempt == 2:
                     st.error("Không thể tải file sau 3 lần thử. Vui lòng kiểm tra URL hoặc liên hệ quản trị viên.")
                     return None
             except Exception as e:
-                st.error(f"Lỗi không xác định khi tải file: {str(e)}")
+                st.error(f"Lỗi khi tải hoặc kiểm tra file Parquet: {str(e)}")
                 return None
     
-    # Đọc file Parquet
     try:
         data = pd.read_parquet(data_path)
+        if not isinstance(data, pd.DataFrame):
+            st.error("Dữ liệu không phải DataFrame Pandas!")
+            return None
+        if 'title' not in data.columns:
+            st.error(f"File Parquet không chứa cột 'title'. Cột hiện có: {data.columns.tolist()}")
+            return None
         data['date'] = pd.to_datetime(data['date'])
         data['time_idx'] = (data['date'] - data['date'].min()).dt.days
         data.fillna(0, inplace=True)
@@ -85,16 +85,19 @@ def load_train_data():
 
 # Giao diện Streamlit
 st.title("Dự báo lượt truy cập Website")
-st.write("Chọn bài viết từ dữ liệu đã train hoặc tải lên dataset mới (chỉ chứa 1 title) để dự báo lượt truy cập trong 30 ngày cuối, so sánh với dữ liệu thực tế và xu hướng với tháng trước.")
+st.write("Chọn bài viết từ dữ liệu đã train hoặc tải lên dataset mới (chỉ chứa 1 title) để dự báo lượt truy cập trong 14 ngày cuối, so sánh với dữ liệu thực tế và xu hướng với 14 ngày trước.")
 
 # Tùy chọn giữa dữ liệu train và dữ liệu mới
 data_option = st.radio("Chọn nguồn dữ liệu:", ("Dữ liệu đã train", "Tải lên dataset mới"))
 
 if data_option == "Dữ liệu đã train":
     data = load_train_data()
-    titles = data['title'].unique()[:200]
-    title = st.selectbox("Chọn bài viết", titles)
-    new_data = None
+    if data is None:
+        st.error("Không thể tải dữ liệu train. Vui lòng kiểm tra log.")
+    else:
+        titles = data['title'].unique()[:200]
+        title = st.selectbox("Chọn bài viết", titles)
+        new_data = None
 else:
     uploaded_file = st.file_uploader("Tải lên file CSV (chứa 1 title)", type=["csv"])
     if uploaded_file is not None:
@@ -119,15 +122,14 @@ else:
         title = None
         st.warning("Vui lòng tải lên file CSV để tiếp tục.")
 
-forecast_days = 30  # Cố định dự báo 30 ngày
+forecast_days = 14  # Thay đổi từ 30 ngày thành 14 ngày
 
-# Hàm tải mô hình
+# Hàm tải mô hình ARIMA
 @st.cache_resource
 def load_arima_model(title, data):
     safe_title = clean_filename(title)
-    # Tìm index dựa trên dữ liệu train (nếu có)
     idx = data[data['title'] == title].index[0] if data_option == "Dữ liệu đã train" else 0
-    model_path = f"models/arima_{idx+1}_{safe_title}.pkl"
+    model_path = f"arima_{idx+1}_{safe_title}.pkl"
     if os.path.exists(model_path):
         try:
             model = joblib.load(model_path)
@@ -136,7 +138,6 @@ def load_arima_model(title, data):
             st.error(f"Lỗi khi tải mô hình ARIMA cho {title}: {str(e)}")
             return None
     else:
-        # Sử dụng mô hình đại diện nếu không tìm thấy mô hình riêng
         rep_model_path = "representative_arima.pkl"
         if os.path.exists(rep_model_path):
             try:
@@ -149,12 +150,12 @@ def load_arima_model(title, data):
         st.error(f"Không tìm thấy mô hình ARIMA cho {title} hoặc mô hình đại diện.")
         return None
 
+# Hàm tải mô hình TFT
 @st.cache_resource
 def load_tft_model(title, data):
     safe_title = clean_filename(title)
-    # Tìm index dựa trên dữ liệu train (nếu có)
     idx = data[data['title'] == title].index[0] if data_option == "Dữ liệu đã train" else 0
-    model_path = f"models/tft_{idx+1}_{safe_title}.pt"
+    model_path = f"tft_{idx+1}_{safe_title}.pt"
     df_title = data[data['title'] == title].copy()
     if len(df_title) < 15:
         st.error(f"Dữ liệu cho {title} không đủ để tạo TimeSeriesDataSet (yêu cầu tối thiểu 15 dòng).")
@@ -189,7 +190,6 @@ def load_tft_model(title, data):
             st.error(f"Lỗi khi tải mô hình TFT cho {title}: {str(e)}")
             return None, None
     else:
-        # Sử dụng mô hình đại diện nếu không tìm thấy mô hình riêng
         rep_model_path = "representative_tft.pt"
         if os.path.exists(rep_model_path):
             try:
@@ -202,12 +202,12 @@ def load_tft_model(title, data):
         st.error(f"Không tìm thấy mô hình TFT cho {title} hoặc mô hình đại diện.")
         return None, None
 
+# Hàm tải mô hình Informer
 @st.cache_resource
 def load_informer_model(title, data):
     safe_title = clean_filename(title)
-    # Tìm index dựa trên dữ liệu train (nếu có)
     idx = data[data['title'] == title].index[0] if data_option == "Dữ liệu đã train" else 0
-    model_path = f"models/informer_{idx+1}_{safe_title}.pt"
+    model_path = f"informer_{idx+1}_{safe_title}.pt"
     model = Informer(
         enc_in=5,
         dec_in=5,
@@ -233,7 +233,6 @@ def load_informer_model(title, data):
             st.error(f"Lỗi khi tải mô hình Informer cho {title}: {str(e)}")
             return None
     else:
-        # Sử dụng mô hình đại diện nếu không tìm thấy mô hình riêng
         rep_model_path = "representative_informer.pt"
         if os.path.exists(rep_model_path):
             try:
@@ -268,10 +267,10 @@ if st.button("Dự báo") and title is not None:
     df_title = df_title.asfreq('D', fill_value=0)
     df_title['title'] = title
     
-    # Chia dữ liệu: trước tháng cuối (train) và tháng cuối (test)
-    last_month_start = df_title.index[-1] - pd.Timedelta(days=30)
-    df_train = df_title[df_title.index < last_month_start]
-    df_test = df_title[df_title.index >= last_month_start]
+    # Chia dữ liệu: trước 14 ngày cuối (train) và 14 ngày cuối (test)
+    last_period_start = df_title.index[-1] - pd.Timedelta(days=14)
+    df_train = df_title[df_title.index < last_period_start]
+    df_test = df_title[df_title.index >= last_period_start]
     
     # ARIMA
     try:
@@ -384,11 +383,11 @@ if st.button("Dự báo") and title is not None:
         st.error(f"Lỗi khi dự báo Informer: {str(e)}")
         informer_forecast = np.zeros(forecast_days)
     
-    # Trực quan hóa tháng cuối (dữ liệu thực tế + dự đoán)
-    st.subheader("So sánh dữ liệu thực tế và dự đoán trong 30 ngày cuối")
+    # Trực quan hóa 14 ngày cuối (dữ liệu thực tế + dự đoán)
+    st.subheader("So sánh dữ liệu thực tế và dự đoán trong 14 ngày cuối")
     fig1 = go.Figure()
     
-    # Dữ liệu thực tế tháng cuối
+    # Dữ liệu thực tế 14 ngày cuối
     fig1.add_trace(go.Scatter(
         x=df_test.index,
         y=df_test['views'],
@@ -398,7 +397,7 @@ if st.button("Dự báo") and title is not None:
         marker=dict(size=4)
     ))
     
-    # Dữ liệu thực tế trước tháng cuối (để nối liền)
+    # Dữ liệu thực tế trước 14 ngày cuối (để nối liền)
     last_data_point = df_train.tail(1)
     if not last_data_point.empty:
         fig1.add_trace(go.Scatter(
@@ -411,7 +410,7 @@ if st.button("Dự báo") and title is not None:
         ))
     
     # Dự báo (nối với điểm cuối của train)
-    forecast_dates = df_test.index[:forecast_days]
+    forecast_dates = pd.date_range(start=df_test.index[0], periods=forecast_days+1, freq='D')[1:]
     
     # ARIMA
     fig1.add_trace(go.Scatter(
@@ -445,7 +444,7 @@ if st.button("Dự báo") and title is not None:
     
     # Cấu hình biểu đồ
     fig1.update_layout(
-        title=f"Dữ liệu thực tế và dự đoán cho '{title}' (30 ngày cuối)",
+        title=f"Dữ liệu thực tế và dự đoán cho '{title}' (14 ngày cuối)",
         xaxis_title="Ngày",
         yaxis_title="Lượt truy cập",
         template="plotly_white",
@@ -472,29 +471,29 @@ if st.button("Dự báo") and title is not None:
     
     st.plotly_chart(fig1, use_container_width=True)
     
-    # Trực quan hóa 30 ngày cuối và 30 ngày trước đó
-    st.subheader("So sánh 30 ngày cuối và 30 ngày trước đó")
-    second_last_month_start = df_title.index[-1] - pd.Timedelta(days=60)
-    second_last_month_end = last_month_start - pd.Timedelta(days=1)
-    df_second_last_month = df_title[(df_title.index >= second_last_month_start) & (df_title.index <= second_last_month_end)]
+    # Trực quan hóa 14 ngày cuối và 14 ngày trước đó
+    st.subheader("So sánh 14 ngày cuối và 14 ngày trước đó")
+    second_last_period_start = df_title.index[-1] - pd.Timedelta(days=28)
+    second_last_period_end = last_period_start - pd.Timedelta(days=1)
+    df_second_last_period = df_title[(df_title.index >= second_last_period_start) & (df_title.index <= second_last_period_end)]
     
     fig2 = go.Figure()
     
-    # Dữ liệu 30 ngày trước đó
+    # Dữ liệu 14 ngày trước đó
     fig2.add_trace(go.Scatter(
-        x=df_second_last_month.index,
-        y=df_second_last_month['views'],
-        name="30 ngày trước",
+        x=df_second_last_period.index,
+        y=df_second_last_period['views'],
+        name="14 ngày trước",
         mode="lines+markers",
         line=dict(color="orange"),
         marker=dict(size=4)
     ))
     
-    # Dữ liệu 30 ngày cuối
+    # Dữ liệu 14 ngày cuối
     fig2.add_trace(go.Scatter(
         x=df_test.index,
         y=df_test['views'],
-        name="30 ngày cuối",
+        name="14 ngày cuối",
         mode="lines+markers",
         line=dict(color="blue"),
         marker=dict(size=4)
@@ -502,7 +501,7 @@ if st.button("Dự báo") and title is not None:
     
     # Cấu hình biểu đồ
     fig2.update_layout(
-        title=f"So sánh lượt truy cập giữa 30 ngày cuối và 30 ngày trước đó cho '{title}'",
+        title=f"So sánh lượt truy cập giữa 14 ngày cuối và 14 ngày trước đó cho '{title}'",
         xaxis_title="Ngày",
         yaxis_title="Lượt truy cập",
         template="plotly_white",
@@ -538,11 +537,11 @@ if data_option == "Dữ liệu đã train" and title is not None:
         informer_results = pd.read_csv("informer_results.csv")
         
         arima_mae = arima_results[arima_results['title'] == title]['mae'].values[0] if title in arima_results['title'].values else "N/A"
-        arima_mse = arima_results[arima_results['title'] == title]['rmse'].values[0] if title in arima_results['title'].values else "N/A"  # Sửa từ 'mse' sang 'rmse' theo mã ARIMA
+        arima_mse = arima_results[arima_results['title'] == title]['rmse'].values[0] if title in arima_results['title'].values else "N/A"
         tft_mae = tft_results[tft_results['title'] == title]['mae'].values[0] if title in tft_results['title'].values else "N/A"
         tft_rmse = tft_results[tft_results['title'] == title]['rmse'].values[0] if title in tft_results['title'].values else "N/A"
         informer_mae = informer_results[informer_results['title'] == title]['mae'].values[0] if title in informer_results['title'].values else "N/A"
-        informer_mse = informer_results[informer_results['title'] == title]['rmse'].values[0] if title in informer_results['title'].values else "N/A"  # Sửa từ 'mse' sang 'rmse' theo mã Informer
+        informer_mse = informer_results[informer_results['title'] == title]['rmse'].values[0] if title in informer_results['title'].values else "N/A"
         
         st.write(f"**ARIMA** - MAE: {arima_mae:.2f}, RMSE: {arima_mse:.2f}" if arima_mae != "N/A" else "**ARIMA** - Không có kết quả đánh giá")
         st.write(f"**TFT** - MAE: {tft_mae:.2f}, RMSE: {tft_rmse:.2f}" if tft_mae != "N/A" else "**TFT** - Không có kết quả đánh giá")
