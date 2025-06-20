@@ -189,7 +189,6 @@ uploaded_file = st.file_uploader("Tải lên file CSV (chứa 1 title)", type=["
 if uploaded_file is not None:
     try:
         data = pd.read_csv(uploaded_file)
-        # In ra các cột để debug
         logger.info(f"Các cột trong file CSV: {list(data.columns)}")
         if validate_new_dataset(data):
             data['time_idx'] = (data['date'] - data['date'].min()).dt.days
@@ -217,7 +216,7 @@ forecast_days = st.slider("Chọn số ngày dự báo (tối đa 30 ngày):", m
 # Dự báo
 if st.button("Dự báo") and data is not None and title is not None:
     logger.info(f"Bắt đầu dự báo cho title: {title} với {forecast_days} ngày")
-    # Tổng hợp dữ liệu theo ngày để loại bỏ trùng lặp
+    # Tổng hợp dữ liệu theo ngày để loại bỏ trùng lặp, giữ cột date
     df_title = data.groupby('date').agg({
         'views': 'sum',
         'day_of_week': 'mean',
@@ -233,14 +232,14 @@ if st.button("Dự báo") and data is not None and title is not None:
         logger.error("Index 'date' vẫn chứa giá trị trùng lặp sau khi tổng hợp")
         st.error("Dữ liệu có ngày trùng lặp không thể xử lý. Vui lòng kiểm tra file CSV.")
     else:
-        df_title = df_title.asfreq('D', fill_value=0)
+        df_title = df_title.asfreq('D', fill_value=0).reset_index()  # Reset index để giữ cột date
 
         # Lấy 3 tháng cuối năm 2024
         end_date = pd.to_datetime('2024-12-31')
         last_month_start = pd.to_datetime('2024-11-01')
         two_months_ago_start = pd.to_datetime('2024-10-01')
-        df_three_months = df_title[(df_title.index >= two_months_ago_start) & (df_title.index <= end_date)]
-        df_last_month = df_title[(df_title.index >= last_month_start) & (df_title.index <= end_date)]
+        df_three_months = df_title[(df_title['date'] >= two_months_ago_start) & (df_title['date'] <= end_date)]
+        df_last_month = df_title[(df_title['date'] >= last_month_start) & (df_title['date'] <= end_date)]
 
         # ARIMA (tạm thời bỏ qua)
         arima_forecast = np.zeros(forecast_days)
@@ -251,12 +250,14 @@ if st.button("Dự báo") and data is not None and title is not None:
             tft_model, training = load_tft_model(title, df_three_months, forecast_days)
             if tft_model and training:
                 tft_forecast = []
-                df_input = df_three_months.reset_index()
+                df_input = df_three_months.copy()  # Sử dụng bản sao để tránh thay đổi dữ liệu gốc
                 steps = (forecast_days // 7) + (1 if forecast_days % 7 else 0)
 
                 for _ in range(steps):
                     for col in ['views', 'day_of_week', 'month', 'quarter', 'tfidf_score']:
                         df_input[col] = pd.to_numeric(df_input[col], errors='coerce').fillna(0).astype(float)
+                    # Tạo time_idx từ date
+                    df_input = df_input.sort_values('date')
                     df_input['time_idx'] = (pd.to_datetime(df_input['date']) - pd.to_datetime(df_input['date']).min()).dt.days
                     if df_input['time_idx'].isna().any():
                         logger.error("Cột 'time_idx' chứa giá trị NaN trong dự báo TFT.")
@@ -317,7 +318,7 @@ if st.button("Dự báo") and data is not None and title is not None:
                 logger.warning("Không có mô hình TFT, sử dụng dự báo mặc định (0)")
         except Exception as e:
             logger.error(f"Lỗi khi dự báo TFT: {str(e)}")
-            st.error(f"Lỗi khi dự báo TFT: {str(e)}")
+            st.error(f"Lỗi khi dự báo TFT: {str(e)}. Vui lòng kiểm tra cột 'date' trong dữ liệu.")
             tft_forecast = np.zeros(forecast_days)
 
         # Informer
@@ -355,7 +356,7 @@ if st.button("Dự báo") and data is not None and title is not None:
         fig = go.Figure()
 
         fig.add_trace(go.Scatter(
-            x=df_three_months.index,
+            x=df_three_months['date'],
             y=df_three_months['views'],
             name="Thực tế (3 tháng cuối 2024)",
             mode="lines+markers",
