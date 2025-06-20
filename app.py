@@ -123,7 +123,7 @@ else:
         title = None
         st.warning("Vui lòng tải lên file CSV để tiếp tục.")
 
-forecast_days = 14  # Thay đổi từ 30 ngày thành 14 ngày
+forecast_days = 30  
 
 # Hàm tải mô hình ARIMA
 @st.cache_resource
@@ -384,11 +384,11 @@ if st.button("Dự báo") and title is not None:
         st.error(f"Lỗi khi dự báo Informer: {str(e)}")
         informer_forecast = np.zeros(forecast_days)
     
-    # Trực quan hóa 14 ngày cuối (dữ liệu thực tế + dự đoán)
-    st.subheader("So sánh dữ liệu thực tế và dự đoán trong 14 ngày cuối")
+    # Trực quan hóa 30 ngày cuối (dữ liệu thực tế + dự đoán)
+    st.subheader("So sánh dữ liệu thực tế và dự đoán trong 30 ngày cuối")
     fig1 = go.Figure()
     
-    # Dữ liệu thực tế 14 ngày cuối
+    # Dữ liệu thực tế 30 ngày cuối
     fig1.add_trace(go.Scatter(
         x=df_test.index,
         y=df_test['views'],
@@ -398,7 +398,7 @@ if st.button("Dự báo") and title is not None:
         marker=dict(size=4)
     ))
     
-    # Dữ liệu thực tế trước 14 ngày cuối (để nối liền)
+    # Dữ liệu thực tế trước 30 ngày cuối (để nối liền)
     last_data_point = df_train.tail(1)
     if not last_data_point.empty:
         fig1.add_trace(go.Scatter(
@@ -480,21 +480,21 @@ if st.button("Dự báo") and title is not None:
     
     fig2 = go.Figure()
     
-    # Dữ liệu 14 ngày trước đó
+    # Dữ liệu 30 ngày trước đó
     fig2.add_trace(go.Scatter(
         x=df_second_last_period.index,
         y=df_second_last_period['views'],
-        name="14 ngày trước",
+        name="30 ngày trước",
         mode="lines+markers",
         line=dict(color="orange"),
         marker=dict(size=4)
     ))
     
-    # Dữ liệu 14 ngày cuối
+    # Dữ liệu 30 ngày cuối
     fig2.add_trace(go.Scatter(
         x=df_test.index,
         y=df_test['views'],
-        name="14 ngày cuối",
+        name="30 ngày cuối",
         mode="lines+markers",
         line=dict(color="blue"),
         marker=dict(size=4)
@@ -502,7 +502,7 @@ if st.button("Dự báo") and title is not None:
     
     # Cấu hình biểu đồ
     fig2.update_layout(
-        title=f"So sánh lượt truy cập giữa 14 ngày cuối và 14 ngày trước đó cho '{title}'",
+        title=f"So sánh lượt truy cập giữa 30 ngày cuối và 30 ngày trước đó cho '{title}'",
         xaxis_title="Ngày",
         yaxis_title="Lượt truy cập",
         template="plotly_white",
