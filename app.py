@@ -41,22 +41,47 @@ def validate_new_dataset(data, required_columns=['date', 'title', 'views', 'day_
         return False
     return True
 
+import streamlit as st
+import pandas as pd
+import gdown
+import os
+import time
+import io
+
 @st.cache_data
 def load_train_data():
-    import gdown
-    import os
-
-    data_path = "data/crawl/crawl_full_views_ca_nam_batch_1.csv"
-    os.makedirs(os.path.dirname(data_path) or ".", exist_ok=True)
+    data_path = "Data/Crawl_ca_nam_long/Crawl_full_views_ca_nam_batch_1.parquet"
+    google_drive_url = "https://drive.google.com/file/d/1bnzkIs3kTMaIKx7w7HKtaLIruZ4R49_Q/view?usp=sharing"  # Thay bằng ID của file Parquet
     
+    # Kiểm tra file tồn tại cục bộ
     if not os.path.exists(data_path):
-        gdown.download("https://drive.google.com/uc?id=1oFawwh82xWDNBTpL58nu5haAD2f5vGtP", data_path, quiet=False)
+        st.info(f"File {data_path} không tồn tại cục bộ. Đang tải từ Google Drive...")
+        for attempt in range(3):  # Thử tối đa 3 lần
+            try:
+                os.makedirs(os.path.dirname(data_path), exist_ok=True)
+                gdown.download(google_drive_url, data_path, quiet=False)
+                st.success(f"Đã tải file Parquet từ Google Drive và lưu tại {data_path}")
+                break
+            except gdown.exceptions.FileURLRetrievalError as e:
+                st.warning(f"Lỗi tải file từ Google Drive, thử lại lần {attempt+1}/3...")
+                time.sleep(60)  # Chờ 60 giây trước khi thử lại
+                if attempt == 2:
+                    st.error("Không thể tải file sau 3 lần thử. Vui lòng kiểm tra URL hoặc liên hệ quản trị viên.")
+                    return None
+            except Exception as e:
+                st.error(f"Lỗi không xác định khi tải file: {str(e)}")
+                return None
     
-    data = pd.read_csv(data_path)
-    data['date'] = pd.to_datetime(data['date'])
-    data['time_idx'] = (data['date'] - data['date'].min()).dt.days
-    data.fillna(0, inplace=True)  # Xử lý NaN
-    return data
+    # Đọc file Parquet
+    try:
+        data = pd.read_parquet(data_path)
+        data['date'] = pd.to_datetime(data['date'])
+        data['time_idx'] = (data['date'] - data['date'].min()).dt.days
+        data.fillna(0, inplace=True)
+        return data
+    except Exception as e:
+        st.error(f"Lỗi khi đọc file Parquet: {str(e)}")
+        return None
 
 # Giao diện Streamlit
 st.title("Dự báo lượt truy cập Website")
