@@ -39,7 +39,7 @@ def validate_new_dataset(data, required_columns=['date', 'title', 'views', 'day_
     logger.info("Kiểm tra tính hợp lệ của dataset mới...")
     if not all(col in data.columns for col in required_columns):
         missing_cols = [col for col in required_columns if col not in data.columns]
-        st.error(f"Dataset mới thiếu các cột bắt buộc: {missing_cols}")
+        st.error(f"Dataset mới thiếu các cột bắt buộc: {missing_cols}. Các cột có trong file: {list(data.columns)}")
         return False
     if len(data['title'].unique()) != 1:
         st.error("Dataset mới chỉ được chứa đúng một title duy nhất.")
@@ -50,7 +50,7 @@ def validate_new_dataset(data, required_columns=['date', 'title', 'views', 'day_
     try:
         data['date'] = pd.to_datetime(data['date'], errors='coerce')
         if data['date'].isna().any():
-            st.error("Một số giá trị trong cột 'date' không hợp lệ và đã bị chuyển thành NaT.")
+            st.error("Một số giá trị trong cột 'date' không hợp lệ và đã bị chuyển thành NaT. Vui lòng kiểm tra định dạng ngày tháng.")
             return False
     except Exception as e:
         st.error(f"Lỗi khi chuyển đổi cột 'date' sang định dạng datetime: {str(e)}")
@@ -62,7 +62,7 @@ def validate_new_dataset(data, required_columns=['date', 'title', 'views', 'day_
     data = data.sort_values('date')
     data['time_idx'] = (data['date'] - data['date'].min()).dt.days
     if data['time_idx'].isna().any():
-        st.error("Không thể tạo cột 'time_idx' từ cột 'date' do dữ liệu không hợp lệ.")
+        st.error("Không thể tạo cột 'time_idx' từ cột 'date' do dữ liệu không hợp lệ. Vui lòng kiểm tra cột 'date'.")
         return False
     logger.info("Dataset mới hợp lệ")
     return True
@@ -189,12 +189,13 @@ uploaded_file = st.file_uploader("Tải lên file CSV (chứa 1 title)", type=["
 if uploaded_file is not None:
     try:
         data = pd.read_csv(uploaded_file)
+        # In ra các cột để debug
+        logger.info(f"Các cột trong file CSV: {list(data.columns)}")
         if validate_new_dataset(data):
             data['time_idx'] = (data['date'] - data['date'].min()).dt.days
             data.fillna(0, inplace=True)
             title = data['title'].iloc[0]
             st.success(f"Dataset mới đã được tải với title: {title}")
-            # In ra để debug
             st.write("Dữ liệu đầu vào:", data.head())
         else:
             st.error("Dataset mới không hợp lệ. Vui lòng kiểm tra lại.")
