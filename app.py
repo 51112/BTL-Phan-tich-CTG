@@ -68,14 +68,14 @@ def load_results_file(file_name):
 
 # Hàm tải mô hình TFT
 @st.cache_resource
-def load_tft_model(title, data):
-    logger.info(f"Tải mô hình TFT cho title: {title}")
+def load_tft_model(title, data, forecast_days):
+    logger.info(f"Tải mô hình TFT cho title: {title} với {forecast_days} ngày dự báo")
     model_path = "representative_tft.pt"
     if len(data) < 15:
         logger.error(f"Dữ liệu cho {title} không đủ (yêu cầu tối thiểu 15 dòng)")
         st.error(f"Dữ liệu cho {title} không đủ để tạo TimeSeriesDataSet (yêu cầu tối thiểu 15 dòng).")
         return None, None
-    # Chuyển đổi kiểu dữ liệu, đảm bảo time_idx là int
+    # Chuyển đổi kiểu dữ liệu, đảm bảo tất cả cột là số
     for col in ['views', 'day_of_week', 'month', 'quarter', 'tfidf_score']:
         data[col] = pd.to_numeric(data[col], errors='coerce').fillna(0).astype(float)
     data['time_idx'] = pd.to_numeric(data['time_idx'], errors='coerce').fillna(0).astype(int)
@@ -87,7 +87,7 @@ def load_tft_model(title, data):
         allow_missing_timesteps=True,
         min_encoder_length=15,
         max_encoder_length=30,
-        max_prediction_length=31,  # Dự báo 31 ngày
+        max_prediction_length=forecast_days,  # Điều chỉnh theo số ngày dự báo
         static_categoricals=["title"],
         time_varying_known_reals=["day_of_week", "month", "quarter", "tfidf_score"],
         time_varying_unknown_reals=["views"],
@@ -117,8 +117,8 @@ def load_tft_model(title, data):
 
 # Hàm tải mô hình Informer
 @st.cache_resource
-def load_informer_model(title):
-    logger.info(f"Tải mô hình Informer cho title: {title}")
+def load_informer_model(title, forecast_days):
+    logger.info(f"Tải mô hình Informer cho title: {title} với {forecast_days} ngày dự báo")
     if Informer is None:
         logger.error("Không thể sử dụng mô hình Informer do lỗi import")
         st.error("Không thể sử dụng mô hình Informer do lỗi import")
@@ -130,7 +130,7 @@ def load_informer_model(title):
         c_out=1,
         seq_len=30,
         label_len=15,
-        out_len=31,  # Dự báo 31 ngày
+        out_len=forecast_days,  # Điều chỉnh theo số ngày dự báo
         d_model=256,
         n_heads=4,
         e_layers=1,
@@ -158,7 +158,7 @@ def load_informer_model(title):
 # Giao diện Streamlit
 st.title("Dự báo lượt truy cập Website")
 logger.info("Khởi tạo giao diện Streamlit thành công")
-st.write("Tải lên dataset mới (chỉ chứa 1 title) để dự báo lượt truy cập trong 31 ngày của tháng 12/2024, so sánh với 2 tháng cuối (11-12/2024) và xu hướng tháng 10/2024.")
+st.write("Tải lên dataset mới (chỉ chứa 1 title) để dự báo lượt truy cập.")
 
 # Tải lên dataset mới
 uploaded_file = st.file_uploader("Tải lên file CSV (chứa 1 title)", type=["csv"])
@@ -185,9 +185,12 @@ else:
     title = None
     st.warning("Vui lòng tải lên file CSV để tiếp tục.")
 
+# Chọn số ngày dự báo
+forecast_days = st.slider("Chọn số ngày dự báo (tối đa 30 ngày):", 1, 30, 7)
+
 # Dự báo
 if st.button("Dự báo") and data is not None and title is not None:
-    logger.info(f"Bắt đầu dự báo cho title: {title}")
+    logger.info(f"Bắt đầu dự báo cho title: {title} với {forecast_days} ngày")
     # Tổng hợp dữ liệu theo ngày để loại bỏ trùng lặp
     df_title = data.groupby('date').agg({
         'views': 'sum',
@@ -213,20 +216,19 @@ if st.button("Dự báo") and data is not None and title is not None:
         last_month_start = pd.to_datetime('2024-11-01')
         two_months_ago_start = pd.to_datetime('2024-10-01')
         df_three_months = df_title[(df_title.index >= two_months_ago_start) & (df_title.index <= end_date)]
-        df_december = df_title[df_title.index.month == 12]  # Dữ liệu tháng 12/2024
         df_last_month = df_title[(df_title.index >= last_month_start) & (df_title.index <= end_date)]
 
         # ARIMA (tạm thời bỏ qua, sử dụng giá trị mặc định)
-        arima_forecast = np.zeros(31)
+        arima_forecast = np.zeros(forecast_days)
         logger.warning("Mô hình ARIMA bị vô hiệu hóa do lỗi pmdarima, sử dụng dự báo mặc định (0)")
 
         # TFT
         try:
-            tft_model, training = load_tft_model(title, df_three_months)
+            tft_model, training = load_tft_model(title, df_three_months, forecast_days)
             if tft_model and training:
                 tft_forecast = []
                 df_input = df_three_months.reset_index()
-                steps = (31 // 7) + (1 if 31 % 7 else 0)
+                steps = (forecast_days // 7) + (1 if forecast_days % 7 else 0)
 
                 for _ in range(steps):
                     for col in ['views', 'day_of_week', 'month', 'quarter', 'tfidf_score', 'time_idx']:
@@ -239,7 +241,7 @@ if st.button("Dự báo") and data is not None and title is not None:
                         allow_missing_timesteps=True,
                         min_encoder_length=15,
                         max_encoder_length=30,
-                        max_prediction_length=31,
+                        max_prediction_length=forecast_days,
                         static_categoricals=["title"],
                         time_varying_known_reals=["day_of_week", "month", "quarter", "tfidf_score"],
                         time_varying_unknown_reals=["views"],
@@ -258,12 +260,12 @@ if st.button("Dự báo") and data is not None and title is not None:
                     predictions = torch.cat(predictions, dim=0).detach().numpy()
                     if predictions.ndim > 1:
                         predictions = predictions.flatten()
-                    predictions = np.maximum(predictions, 0)[:31]
+                    predictions = np.maximum(predictions, 0)[:forecast_days]
                     tft_forecast.extend(predictions)
 
-                    if len(tft_forecast) < 31:
+                    if len(tft_forecast) < forecast_days:
                         last_date = df_input['date'].max()
-                        new_dates = pd.date_range(start=last_date + timedelta(days=1), periods=min(7, 31 - len(tft_forecast)), freq='D')
+                        new_dates = pd.date_range(start=last_date + timedelta(days=1), periods=min(7, forecast_days - len(tft_forecast)), freq='D')
                         last_tfidf = float(df_input['tfidf_score'].iloc[-1])
                         last_time_idx = df_input['time_idx'].max()
                         new_time_idx = np.arange(last_time_idx + 1, last_time_idx + 1 + len(new_dates), dtype=np.int64)
@@ -279,19 +281,19 @@ if st.button("Dự báo") and data is not None and title is not None:
                         })
                         df_input = pd.concat([df_input, new_data], ignore_index=True)
 
-                tft_forecast = np.array(tft_forecast[:31])
-                logger.info("Dự báo TFT thành công")
+                tft_forecast = np.array(tft_forecast[:forecast_days])
+                logger.info(f"Dự báo TFT thành công với {forecast_days} ngày")
             else:
-                tft_forecast = np.zeros(31)
+                tft_forecast = np.zeros(forecast_days)
                 logger.warning("Không có mô hình TFT, sử dụng dự báo mặc định (0)")
         except Exception as e:
             logger.error(f"Lỗi khi dự báo TFT: {str(e)}")
             st.error(f"Lỗi khi dự báo TFT: {str(e)}")
-            tft_forecast = np.zeros(31)
+            tft_forecast = np.zeros(forecast_days)
 
         # Informer
         try:
-            informer_model = load_informer_model(title)
+            informer_model = load_informer_model(title, forecast_days)
             if informer_model:
                 scaler = StandardScaler()
                 views_scaler = StandardScaler()
@@ -301,26 +303,26 @@ if st.button("Dự báo") and data is not None and title is not None:
 
                 x_enc = torch.tensor(data_scaled, dtype=torch.float32).unsqueeze(0)
                 x_mark_enc = torch.tensor(df_informer[['day_of_week', 'month', 'quarter']].values, dtype=torch.float32).unsqueeze(0)
-                x_dec = torch.zeros((15 + 31, 5), dtype=torch.float32).unsqueeze(0)
+                x_dec = torch.zeros((15 + forecast_days, 5), dtype=torch.float32).unsqueeze(0)
                 x_dec[:, :15] = torch.tensor(data_scaled[-15:], dtype=torch.float32)
-                x_mark_dec = torch.tensor(np.zeros((15 + 31, 3)), dtype=torch.float32).unsqueeze(0)
+                x_mark_dec = torch.tensor(np.zeros((15 + forecast_days, 3)), dtype=torch.float32).unsqueeze(0)
                 x_mark_dec[:, :15] = x_mark_enc[:, -15:]
 
                 informer_model.eval()
                 pred_scaled = informer_model(x_enc, x_mark_enc, x_dec, x_mark_dec).squeeze(-1).detach().numpy().squeeze()
-                informer_forecast = views_scaler.inverse_transform(pred_scaled.reshape(-1, 1)).flatten()[:31]
+                informer_forecast = views_scaler.inverse_transform(pred_scaled.reshape(-1, 1)).flatten()[:forecast_days]
                 informer_forecast = np.maximum(informer_forecast, 0)
-                logger.info("Dự báo Informer thành công")
+                logger.info(f"Dự báo Informer thành công với {forecast_days} ngày")
             else:
-                informer_forecast = np.zeros(31)
+                informer_forecast = np.zeros(forecast_days)
                 logger.warning("Không có mô hình Informer, sử dụng dự báo mặc định (0)")
         except Exception as e:
             logger.error(f"Lỗi khi dự báo Informer: {str(e)}")
             st.error(f"Lỗi khi dự báo Informer: {str(e)}")
-            informer_forecast = np.zeros(31)
+            informer_forecast = np.zeros(forecast_days)
 
-        # Trực quan hóa 3 tháng cuối và dự báo 31 ngày
-        st.subheader("So sánh dữ liệu thực tế 3 tháng cuối 2024 và dự báo 31 ngày tháng 12/2024")
+        # Trực quan hóa 3 tháng cuối và dự báo
+        st.subheader(f"So sánh dữ liệu thực tế 3 tháng cuối 2024 và dự báo {forecast_days} ngày")
         fig = go.Figure()
 
         # Dữ liệu thực tế 3 tháng cuối (10/2024 - 12/2024)
@@ -333,8 +335,8 @@ if st.button("Dự báo") and data is not None and title is not None:
             marker=dict(size=4)
         ))
 
-        # Dự báo 31 ngày tháng 12/2024 (nối với điểm cuối của tháng 12)
-        forecast_dates = pd.date_range(start=end_date + timedelta(days=1), periods=31, freq='D')
+        # Dự báo ngày
+        forecast_dates = pd.date_range(start=end_date + timedelta(days=1), periods=forecast_days, freq='D')
 
         # ARIMA
         fig.add_trace(go.Scatter(
@@ -366,9 +368,15 @@ if st.button("Dự báo") and data is not None and title is not None:
             marker=dict(size=4)
         ))
 
+        # Thêm 3 mốc thời gian (1, 7, 30 ngày) dưới dạng đường thẳng đứng
+        if forecast_days >= 30:
+            fig.add_vline(x=pd.to_datetime('2025-01-01') + timedelta(days=0), line_dash="dash", line_color="gray", annotation_text="1 ngày")
+            fig.add_vline(x=pd.to_datetime('2025-01-01') + timedelta(days=6), line_dash="dash", line_color="gray", annotation_text="7 ngày")
+            fig.add_vline(x=pd.to_datetime('2025-01-01') + timedelta(days=29), line_dash="dash", line_color="gray", annotation_text="30 ngày")
+
         # Cấu hình biểu đồ
         fig.update_layout(
-            title=f"Dữ liệu thực tế 3 tháng cuối 2024 và dự báo 31 ngày cho '{title}'",
+            title=f"Dữ liệu thực tế 3 tháng cuối 2024 và dự báo {forecast_days} ngày cho '{title}'",
             xaxis_title="Ngày",
             yaxis_title="Lượt truy cập",
             template="plotly_white",
@@ -394,113 +402,6 @@ if st.button("Dự báo") and data is not None and title is not None:
         )
 
         st.plotly_chart(fig, use_container_width=True)
-
-        # So sánh dự đoán ngày trong tháng 12/2024
-        st.subheader("So sánh dự đoán từng ngày trong tháng 12/2024")
-        dec_dates = pd.date_range(start='2024-12-01', end='2024-12-31', freq='D')
-        dec_actual = df_december['views'].reindex(dec_dates, method='ffill').fillna(0).values
-        comparison_df = pd.DataFrame({
-            'Date': dec_dates,
-            'Actual': dec_actual,
-            'TFT': [df_last_month['views'].iloc[-1]] + list(tft_forecast)[:30],  # Đặt giá trị đầu bằng thực tế cuối
-            'Informer': [df_last_month['views'].iloc[-1]] + list(informer_forecast)[:30]
-        })
-        st.table(comparison_df)
-
-        # Dự báo nối tiếp 1, 7, 30 ngày
-        st.subheader("Dự báo nối tiếp sau 2024-12-31")
-        forecast_dates_1 = [end_date + timedelta(days=1)]  # 1 ngày
-        forecast_dates_7 = pd.date_range(start=end_date + timedelta(days=1), periods=7, freq='D')  # 7 ngày
-        forecast_dates_30 = pd.date_range(start=end_date + timedelta(days=1), periods=30, freq='D')  # 30 ngày
-
-        # TFT dự báo mở rộng
-        if tft_model and training:
-            try:
-                tft_extended_forecast = []
-                df_input_extended = df_three_months.reset_index()
-                for length in [1, 7, 30]:
-                    temp_training = TimeSeriesDataSet(
-                        df_input_extended,
-                        time_idx="time_idx",
-                        target="views",
-                        group_ids=["title"],
-                        allow_missing_timesteps=True,
-                        min_encoder_length=15,
-                        max_encoder_length=30,
-                        max_prediction_length=length,
-                        static_categoricals=["title"],
-                        time_varying_known_reals=["day_of_week", "month", "quarter", "tfidf_score"],
-                        time_varying_unknown_reals=["views"],
-                        target_normalizer=GroupNormalizer(groups=["title"], transformation="softplus")
-                    )
-                    dataloader = temp_training.to_dataloader(train=False, batch_size=32, num_workers=0)
-                    predictions = []
-                    tft_model.eval()
-                    with torch.no_grad():
-                        for batch in dataloader:
-                            x, _ = batch
-                            x = {k: v.to(torch.device('cpu')) for k, v in x.items() if v is not None}
-                            output = tft_model(x)
-                            pred = output.prediction.squeeze(-1)
-                            predictions.append(pred)
-                    predictions = torch.cat(predictions, dim=0).detach().numpy()
-                    if predictions.ndim > 1:
-                        predictions = predictions.flatten()
-                    predictions = np.maximum(predictions, 0)[:length]
-                    tft_extended_forecast.append(predictions)
-                tft_1_day = [df_last_month['views'].iloc[-1]] + list(tft_extended_forecast[0])
-                tft_7_days = [df_last_month['views'].iloc[-1]] + list(tft_extended_forecast[1])
-                tft_30_days = [df_last_month['views'].iloc[-1]] + list(tft_extended_forecast[2])
-            except Exception as e:
-                logger.error(f"Lỗi khi dự báo mở rộng TFT: {str(e)}")
-                st.error(f"Lỗi khi dự báo mở rộng TFT: {str(e)}")
-                tft_1_day = [0]
-                tft_7_days = [0] * 7
-                tft_30_days = [0] * 30
-        else:
-            tft_1_day = [0]
-            tft_7_days = [0] * 7
-            tft_30_days = [0] * 30
-
-        # Informer dự báo mở rộng
-        if informer_model:
-            try:
-                informer_extended_forecast = []
-                df_informer_extended = df_three_months[['views', 'day_of_week', 'month', 'quarter', 'tfidf_score']].tail(30)
-                data_scaled = scaler.fit_transform(df_informer_extended)
-                views_scaled = views_scaler.fit_transform(df_informer_extended[['views']])
-                for length in [1, 7, 30]:
-                    x_enc = torch.tensor(data_scaled, dtype=torch.float32).unsqueeze(0)
-                    x_mark_enc = torch.tensor(df_informer_extended[['day_of_week', 'month', 'quarter']].values, dtype=torch.float32).unsqueeze(0)
-                    x_dec = torch.zeros((15 + length, 5), dtype=torch.float32).unsqueeze(0)
-                    x_dec[:, :15] = torch.tensor(data_scaled[-15:], dtype=torch.float32)
-                    x_mark_dec = torch.tensor(np.zeros((15 + length, 3)), dtype=torch.float32).unsqueeze(0)
-                    x_mark_dec[:, :15] = x_mark_enc[:, -15:]
-                    informer_model.eval()
-                    pred_scaled = informer_model(x_enc, x_mark_enc, x_dec, x_mark_dec).squeeze(-1).detach().numpy().squeeze()
-                    pred = views_scaler.inverse_transform(pred_scaled.reshape(-1, 1)).flatten()[:length]
-                    informer_extended_forecast.append(np.maximum(pred, 0))
-                informer_1_day = [df_last_month['views'].iloc[-1]] + list(informer_extended_forecast[0])
-                informer_7_days = [df_last_month['views'].iloc[-1]] + list(informer_extended_forecast[1])
-                informer_30_days = [df_last_month['views'].iloc[-1]] + list(informer_extended_forecast[2])
-            except Exception as e:
-                logger.error(f"Lỗi khi dự báo mở rộng Informer: {str(e)}")
-                st.error(f"Lỗi khi dự báo mở rộng Informer: {str(e)}")
-                informer_1_day = [0]
-                informer_7_days = [0] * 7
-                informer_30_days = [0] * 30
-        else:
-            informer_1_day = [0]
-            informer_7_days = [0] * 7
-            informer_30_days = [0] * 30
-
-        # Hiển thị dự báo nối tiếp
-        st.write("**1 ngày tiếp theo (2025-01-01):**")
-        st.write(f"TFT: {tft_1_day[1]:.2f}, Informer: {informer_1_day[1]:.2f}")
-        st.write("**7 ngày tiếp theo (2025-01-01 đến 2025-01-07):**")
-        st.write(f"TFT: {[f'{x:.2f}' for x in tft_7_days[1:]]}, Informer: {[f'{x:.2f}' for x in informer_7_days[1:]]}")
-        st.write("**30 ngày tiếp theo (2025-01-01 đến 2025-01-30):**")
-        st.write(f"TFT: {[f'{x:.2f}' for x in tft_30_days[1:]]}, Informer: {[f'{x:.2f}' for x in informer_30_days[1:]]}")
 
         # Hiển thị kết quả đánh giá (dựa trên mô hình đại diện)
         st.subheader("Kết quả đánh giá mô hình (dựa trên mô hình đại diện)")
