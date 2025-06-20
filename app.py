@@ -103,17 +103,20 @@ def load_tft_model(title, data, forecast_days):
     )
     if os.path.exists(model_path):
         try:
-            tft.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
-            logger.info("Đã tải mô hình TFT đại diện thành công")
-            st.warning(f"Sử dụng mô hình TFT đại diện cho {title}.")
-            return tft, training
+            state_dict = torch.load(model_path, map_location=torch.device('cpu'))
+            # Loại bỏ các khóa không mong muốn nếu có
+            state_dict = {k: v for k, v in state_dict.items() if k in tft.state_dict()}
+            tft.load_state_dict(state_dict, strict=False)
+            logger.info("Đã tải mô hình TFT đại diện thành công (bỏ qua các khóa không khớp)")
+            st.warning(f"Sử dụng mô hình TFT đại diện cho {title} (có thể không hoàn toàn khớp cấu trúc).")
         except Exception as e:
             logger.error(f"Lỗi khi tải mô hình TFT: {str(e)}")
-            st.error(f"Lỗi khi tải mô hình TFT: {str(e)}")
-            return None, None
-    logger.error("Không tìm thấy mô hình TFT đại diện")
-    st.error("Không tìm thấy mô hình TFT đại diện")
-    return None, None
+            st.error(f"Lỗi khi tải mô hình TFT: {str(e)}. Sử dụng mô hình mặc định.")
+            tft = TemporalFusionTransformer.from_dataset(training, hidden_size=32, attention_head_size=2, dropout=0.2, hidden_continuous_size=16, output_size=1)
+    else:
+        logger.error("Không tìm thấy mô hình TFT đại diện")
+        st.error("Không tìm thấy mô hình TFT đại diện. Sử dụng mô hình mặc định.")
+    return tft, training
 
 # Hàm tải mô hình Informer
 @st.cache_resource
@@ -146,14 +149,18 @@ def load_informer_model(title, forecast_days):
             model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
             logger.info("Đã tải mô hình Informer đại diện thành công")
             st.warning(f"Sử dụng mô hình Informer đại diện cho {title}.")
-            return model
         except Exception as e:
             logger.error(f"Lỗi khi tải mô hình Informer: {str(e)}")
-            st.error(f"Lỗi khi tải mô hình Informer: {str(e)}")
-            return None
-    logger.error("Không tìm thấy mô hình Informer đại diện")
-    st.error("Không tìm thấy mô hình Informer đại diện")
-    return None
+            st.error(f"Lỗi khi tải mô hình Informer: {str(e)}. Sử dụng mô hình mặc định.")
+            model = Informer(
+                enc_in=5, dec_in=5, c_out=1, seq_len=30, label_len=15, out_len=forecast_days,
+                d_model=256, n_heads=4, e_layers=1, d_layers=1, d_ff=1024, dropout=0.1,
+                attn='prob', embed='timeF', freq='d'
+            )
+    else:
+        logger.error("Không tìm thấy mô hình Informer đại diện")
+        st.error("Không tìm thấy mô hình Informer đại diện. Sử dụng mô hình mặc định.")
+    return model
 
 # Giao diện Streamlit
 st.title("Dự báo lượt truy cập Website")
