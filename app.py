@@ -46,8 +46,7 @@ def load_train_data():
     import gdown
     import os
 
-    data_path = "Crawl(2)/Crawl_ca_nam_long/Crawl_full_views_ca_nam_batch_1.csv"
-    # Tạo thư mục nếu chưa tồn tại
+    data_path = "data/crawl/crawl_full_views_ca_nam_batch_1.csv"
     os.makedirs(os.path.dirname(data_path) or ".", exist_ok=True)
     
     if not os.path.exists(data_path):
