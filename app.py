@@ -122,7 +122,6 @@ def load_tft_model(title, data, forecast_days):
     if os.path.exists(model_path):
         try:
             state_dict = torch.load(model_path, map_location=torch.device('cpu'))
-            # Lọc các khóa khớp với mô hình hiện tại
             model_dict = tft.state_dict()
             state_dict = {k: v for k, v in state_dict.items() if k in model_dict and v.size() == model_dict[k].size()}
             missing_keys = [k for k in model_dict.keys() if k not in state_dict]
@@ -263,9 +262,16 @@ if st.button("Dự báo") and data is not None and title is not None:
                 for _ in range(steps):
                     for col in ['views', 'day_of_week', 'month', 'quarter', 'tfidf_score']:
                         df_input[col] = pd.to_numeric(df_input[col], errors='coerce').fillna(0).astype(float)
+                    # Kiểm tra và chuyển đổi cột date
+                    df_input['date'] = pd.to_datetime(df_input['date'], errors='coerce')
+                    invalid_dates = df_input['date'].isna()
+                    if invalid_dates.any():
+                        logger.error(f"Các giá trị không hợp lệ trong cột 'date': {df_input[invalid_dates]['date'].tolist()}")
+                        st.error("Cột 'date' chứa giá trị không hợp lệ. Vui lòng kiểm tra dữ liệu.")
+                        break
                     # Tạo time_idx từ date
                     df_input = df_input.sort_values('date')
-                    df_input['time_idx'] = (pd.to_datetime(df_input['date']) - pd.to_datetime(df_input['date'].min())).dt.days
+                    df_input['time_idx'] = (df_input['date'] - df_input['date'].min()).dt.days
                     if df_input['time_idx'].isna().any():
                         logger.error("Cột 'time_idx' chứa giá trị NaN trong dự báo TFT.")
                         st.error("Cột 'time_idx' chứa giá trị NaN. Vui lòng kiểm tra cột 'date'.")
@@ -371,10 +377,10 @@ if st.button("Dự báo") and data is not None and title is not None:
             marker=dict(size=4)
         ))
 
-        forecast_dates = pd.date_range(start=end_date + timedelta(days=1), periods=forecast_days, freq='D')
+        forecast_dates = pd.date_range(start=df_three_months['date'].max() + timedelta(days=1), periods=forecast_days, freq='D')
 
         fig.add_trace(go.Scatter(
-            x=[end_date] + list(forecast_dates),
+            x=[df_three_months['date'].max()] + list(forecast_dates),
             y=[df_last_month['views'].iloc[-1]] + list(arima_forecast),
             name="ARIMA",
             mode="lines+markers",
@@ -383,7 +389,7 @@ if st.button("Dự báo") and data is not None and title is not None:
         ))
 
         fig.add_trace(go.Scatter(
-            x=[end_date] + list(forecast_dates),
+            x=[df_three_months['date'].max()] + list(forecast_dates),
             y=[df_last_month['views'].iloc[-1]] + list(tft_forecast),
             name="TFT",
             mode="lines+markers",
@@ -392,7 +398,7 @@ if st.button("Dự báo") and data is not None and title is not None:
         ))
 
         fig.add_trace(go.Scatter(
-            x=[end_date] + list(forecast_dates),
+            x=[df_three_months['date'].max()] + list(forecast_dates),
             y=[df_last_month['views'].iloc[-1]] + list(informer_forecast),
             name="Informer",
             mode="lines+markers",
@@ -401,9 +407,9 @@ if st.button("Dự báo") and data is not None and title is not None:
         ))
 
         if forecast_days >= 30:
-            fig.add_vline(x=pd.to_datetime('2025-01-01') + timedelta(days=0), line_dash="dash", line_color="gray", annotation_text="1 ngày")
-            fig.add_vline(x=pd.to_datetime('2025-01-01') + timedelta(days=6), line_dash="dash", line_color="gray", annotation_text="7 ngày")
-            fig.add_vline(x=pd.to_datetime('2025-01-01') + timedelta(days=29), line_dash="dash", line_color="gray", annotation_text="30 ngày")
+            fig.add_vline(x=forecast_dates[0], line_dash="dash", line_color="gray", annotation_text="1 ngày")
+            fig.add_vline(x=forecast_dates[6], line_dash="dash", line_color="gray", annotation_text="7 ngày")
+            fig.add_vline(x=forecast_dates[29], line_dash="dash", line_color="gray", annotation_text="30 ngày")
 
         fig.update_layout(
             title=f"Dữ liệu thực tế 3 tháng cuối 2024 và dự báo {forecast_days} ngày cho '{title}'",
