@@ -454,25 +454,22 @@ if st.button("Dự báo") and data is not None and title is not None:
         informer_forecast = np.zeros(forecast_days)
 
     # Trực quan hóa
-    st.subheader(f"So sánh dữ liệu thực tế và dự báo {forecast_days} ngày")
+    st.subheader(f"So sánh dữ liệu thực tế 3 tháng cuối 2024 và dự báo {forecast_days} ngày")
     fig = go.Figure()
 
-    # Plot full actual data
     fig.add_trace(go.Scatter(
-        x=df_title['date'],
-        y=df_title['views'],
-        name="Thực tế",
+        x=df_three_months['date'],
+        y=df_three_months['views'],
+        name="Thực tế (3 tháng cuối 2024)",
         mode="lines+markers",
         line=dict(color="blue"),
         marker=dict(size=4)
     ))
 
-    # Forecast dates starting from the last actual date
-    forecast_dates = pd.date_range(start=df_title['date'].max() + timedelta(days=1), periods=forecast_days, freq='D')
+    forecast_dates = pd.date_range(start=df_three_months['date'].max() + timedelta(days=1), periods=forecast_days, freq='D')
 
-    # ARIMA
     fig.add_trace(go.Scatter(
-        x=[df_title['date'].max()] + list(forecast_dates),
+        x=[df_three_months['date'].max()] + list(forecast_dates),
         y=[df_last_month['views'].iloc[-1]] + list(arima_forecast),
         name="ARIMA",
         mode="lines+markers",
@@ -480,9 +477,8 @@ if st.button("Dự báo") and data is not None and title is not None:
         marker=dict(size=4)
     ))
 
-    # TFT
     fig.add_trace(go.Scatter(
-        x=[df_title['date'].max()] + list(forecast_dates),
+        x=[df_three_months['date'].max()] + list(forecast_dates),
         y=[df_last_month['views'].iloc[-1]] + list(tft_forecast),
         name="TFT",
         mode="lines+markers",
@@ -490,9 +486,8 @@ if st.button("Dự báo") and data is not None and title is not None:
         marker=dict(size=4)
     ))
 
-    # Informer
     fig.add_trace(go.Scatter(
-        x=[df_title['date'].max()] + list(forecast_dates),
+        x=[df_three_months['date'].max()] + list(forecast_dates),
         y=[df_last_month['views'].iloc[-1]] + list(informer_forecast),
         name="Informer",
         mode="lines+markers",
@@ -507,7 +502,7 @@ if st.button("Dự báo") and data is not None and title is not None:
         fig.add_vline(x=float(forecast_dates_numeric[29]), line_dash="dash", line_color="gray", annotation_text="30 ngày")
 
     fig.update_layout(
-        title=f"Dữ liệu thực tế và dự báo {forecast_days} ngày cho '{title}'",
+        title=f"Dữ liệu thực tế 3 tháng cuối 2024 và dự báo {forecast_days} ngày cho '{title}'",
         xaxis_title="Ngày",
         yaxis_title="Lượt truy cập",
         template="plotly_white",
