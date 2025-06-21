@@ -13,6 +13,7 @@ from sklearn.preprocessing import StandardScaler
 from datetime import timedelta
 import logging
 from sklearn.metrics import mean_absolute_error, mean_squared_error
+import pmdarima as pm
 
 # Thiết lập logging
 logging.basicConfig(level=logging.INFO)
@@ -34,6 +35,58 @@ except Exception as e:
     logger.error(f"Lỗi khi import Informer: {str(e)}")
     st.error(f"Lỗi khi import Informer: {str(e)}")
     Informer = None
+
+# Hàm làm dữ liệu liên tục
+def make_data_continuous(data):
+    logger.info("Bắt đầu làm dữ liệu liên tục...")
+    try:
+        # Đảm bảo cột date ở dạng datetime
+        data['date'] = pd.to_datetime(data['date'], errors='coerce')
+        if data['date'].isna().any():
+            logger.error("Cột 'date' chứa giá trị không hợp lệ.")
+            st.error("Cột 'date' chứa giá trị không hợp lệ.")
+            return None
+
+        # Tạo chuỗi ngày liên tục từ ngày nhỏ nhất đến ngày lớn nhất
+        start_date = data['date'].min()
+        end_date = data['date'].max()
+        date_range = pd.date_range(start=start_date, end=end_date, freq='D')
+
+        # Tạo DataFrame mới với tất cả các ngày
+        df_continuous = pd.DataFrame({'date': date_range})
+
+        # Gộp dữ liệu gốc với chuỗi ngày liên tục
+        df_continuous = df_continuous.merge(data, on='date', how='left')
+
+        # Điền giá trị thiếu
+        # Điền title (giá trị duy nhất trong tập test)
+        df_continuous['title'] = df_continuous['title'].fillna(data['title'].iloc[0])
+
+        # Nội suy tuyến tính cho cột views
+        df_continuous['views'] = df_continuous['views'].interpolate(method='linear', limit_direction='both')
+
+        # Điền các cột khác
+        df_continuous['day_of_week'] = df_continuous['date'].dt.dayofweek
+        df_continuous['month'] = df_continuous['date'].dt.month
+        df_continuous['quarter'] = df_continuous['date'].dt.quarter
+
+        # Điền tfidf_score bằng giá trị gần nhất (forward fill, rồi backward fill nếu cần)
+        df_continuous['tfidf_score'] = df_continuous['tfidf_score'].fillna(method='ffill')
+        df_continuous['tfidf_score'] = df_continuous['tfidf_score'].fillna(method='bfill')
+
+        # Tạo lại time_idx liên tục
+        df_continuous['time_idx'] = (df_continuous['date'] - start_date).dt.days
+
+        # Đảm bảo các cột số ở đúng định dạng
+        for col in ['views', 'day_of_week', 'month', 'quarter', 'tfidf_score']:
+            df_continuous[col] = pd.to_numeric(df_continuous[col], errors='coerce').astype(float)
+
+        logger.info("Đã làm dữ liệu liên tục thành công")
+        return df_continuous
+    except Exception as e:
+        logger.error(f"Lỗi khi làm dữ liệu liên tục: {str(e)}")
+        st.error(f"Lỗi khi làm dữ liệu liên tục: {str(e)}")
+        return None
 
 # Hàm kiểm tra tính hợp lệ của dataset mới
 def validate_new_dataset(data):
@@ -85,6 +138,24 @@ def calculate_metrics(actual, predicted):
         rmse = np.sqrt(mean_squared_error(actual, predicted))
         return mae, rmse
     return None, None
+
+# Hàm dự báo ARIMA
+def forecast_arima(data, forecast_days):
+    logger.info(f"Dự báo ARIMA cho {forecast_days} ngày")
+    try:
+        # Lấy chuỗi views của title duy nhất
+        series = data['views'].values
+        # Xây dựng và huấn luyện mô hình ARIMA tự động
+        model = pm.auto_arima(series, seasonal=True, m=7, trace=True, error_action='ignore', suppress_warnings=True)
+        # Dự báo
+        forecast, conf_int = model.predict(n_periods=forecast_days, return_conf_int=True)
+        forecast = np.maximum(forecast, 0)  # Đảm bảo giá trị không âm
+        logger.info(f"Dự báo ARIMA thành công với {forecast_days} ngày")
+        return forecast
+    except Exception as e:
+        logger.error(f"Lỗi khi dự báo ARIMA: {str(e)}")
+        st.error(f"Lỗi khi dự báo ARIMA: {str(e)}. Sử dụng dự báo mặc định (0).")
+        return np.zeros(forecast_days)
 
 # Hàm tải mô hình TFT
 @st.cache_resource
@@ -202,11 +273,18 @@ if uploaded_file is not None:
         data = pd.read_csv(uploaded_file)
         logger.info(f"Các cột trong file CSV: {list(data.columns)}")
         if validate_new_dataset(data):
-            data['time_idx'] = data['time_idx'].astype(int)  # Đảm bảo time_idx là integer
-            data.fillna(0, inplace=True)
-            title = data['title'].iloc[0]
-            st.success(f"Dataset mới đã được tải với title: {title}")
-            st.write("Dữ liệu đầu vào:", data.head())
+            # Làm dữ liệu liên tục trước khi xử lý
+            data = make_data_continuous(data)
+            if data is None:
+                st.error("Không thể làm dữ liệu liên tục. Vui lòng kiểm tra lại.")
+                data = None
+                title = None
+            else:
+                data['time_idx'] = data['time_idx'].astype(int)  # Đảm bảo time_idx là integer
+                data.fillna(0, inplace=True)
+                title = data['title'].iloc[0]
+                st.success(f"Dataset mới đã được tải với title: {title}")
+                st.write("Dữ liệu đầu vào (đã làm liên tục):", data.head())
         else:
             st.error("Dataset mới không hợp lệ. Vui lòng kiểm tra lại.")
             data = None
@@ -238,9 +316,8 @@ if st.button("Dự báo") and data is not None and title is not None:
     df_three_months = df_title[df_title['date'] >= two_months_ago_start]
     df_last_month = df_title[df_title['date'] >= last_month_start]
 
-    # ARIMA (tạm thời bỏ qua)
-    arima_forecast = np.zeros(forecast_days)
-    logger.warning("Mô hình ARIMA bị vô hiệu hóa do lỗi pmdarima, sử dụng dự báo mặc định (0)")
+    # ARIMA
+    arima_forecast = forecast_arima(df_three_months, forecast_days)
 
     # TFT
     try:
