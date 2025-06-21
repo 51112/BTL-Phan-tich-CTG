@@ -294,7 +294,7 @@ def load_informer_model(title, forecast_days):
     return model
 
 # Giao diện Streamlit
-st.title("Dự báo lượt truy cập Website")
+st.title("Dự báo lượt truy cập bài viết trên Wikipedia")
 logger.info("Khởi tạo giao diện Streamlit thành công")
 st.write("Tải lên dataset mới (chứa 1 title) để dự báo lượt truy cập.")
 
