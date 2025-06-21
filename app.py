@@ -199,7 +199,8 @@ def forecast_arima(data, forecast_days):
 @st.cache_resource
 def load_tft_model(title, data, forecast_days):
     logger.info(f"Tải mô hình TFT cho title: {title} với {forecast_days} ngày dự báo")
-    model_path = "representative_tft.pt"
+    model_path = os.path.join(os.path.dirname(__file__), "models", "representative_tft.pt")
+    logger.info(f"Checking model path: {os.path.abspath(model_path)}")
     if len(data) < 15:
         logger.error(f"Dữ liệu cho {title} không đủ (yêu cầu tối thiểu 15 dòng)")
         st.error(f"Dữ liệu cho {title} không đủ để tạo TimeSeriesDataSet (yêu cầu tối thiểu 15 dòng).")
@@ -257,7 +258,8 @@ def load_informer_model(title, forecast_days):
         logger.error("Không thể sử dụng mô hình Informer do lỗi import")
         st.error("Không thể sử dụng mô hình Informer do lỗi import")
         return None
-    model_path = "representative_informer.pt"
+    model_path = os.path.join(os.path.dirname(__file__), "models", "representative_informer.pt")
+    logger.info(f"Checking model path: {os.path.abspath(model_path)}")
     model = Informer(
         enc_in=5,
         dec_in=5,
