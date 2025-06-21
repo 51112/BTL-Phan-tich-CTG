@@ -7,3 +7,4 @@ pytorch-forecasting
 plotly
 scikit-learn
 cython
+pmdarima
