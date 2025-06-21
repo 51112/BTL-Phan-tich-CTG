@@ -136,29 +136,12 @@ def calculate_metrics(actual, predicted):
 
 # Hàm dự báo ARIMA
 def forecast_arima(data, forecast_days):
-    logger.info(f"Dự báo ARIMA cho {forecast_days} ngày")
     try:
+        model = joblib.load("representative_arima.pkl")
+        logger.info(f"Dự báo ARIMA cho {forecast_days} ngày")
         series = data['views'].values
-        # Kiểm tra tính dừng và chọn order
-        order = (1, 1, 1)  # Mặc định order
-        if not check_stationarity(series):
-            series_diff = np.diff(series)
-            series = series_diff[~np.isnan(series_diff)]
-            order = (1, 1, 1)  # D=1
-            if len(series) < 10:
-                logger.warning(f"Dữ liệu sau diff lần 1 quá ngắn ({len(series)} bản ghi), sử dụng dự báo mặc định.")
-                return np.zeros(forecast_days)
-            if not check_stationarity(series):
-                series_diff = np.diff(series)
-                series = series_diff[~np.isnan(series_diff)]
-                order = (1, 2, 1)  # D=2
-                if len(series) < 10:
-                    logger.warning(f"Dữ liệu sau diff lần 2 quá ngắn ({len(series)} bản ghi), sử dụng dự báo mặc định.")
-                    return np.zeros(forecast_days)
-        # Huấn luyện và dự báo
-        model = ARIMA(series, order=order).fit()
         forecast = model.forecast(steps=forecast_days)
-        forecast = np.maximum(forecast, 0)  # Đảm bảo giá trị không âm
+        forecast = np.maximum(forecast, 0)
         logger.info(f"Dự báo ARIMA thành công với {forecast_days} ngày")
         return forecast
     except Exception as e:
