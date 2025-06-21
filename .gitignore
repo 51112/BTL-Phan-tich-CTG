@@ -1,8 +1,20 @@
+# Ignore Python compiled files
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
+
+# Ignore virtual environments
 env/
 venv/
+
+# Ignore data directory (if any)
 data/
+
+# Ignore models and results directories
+models/
+results/
+
+# Ignore log files
+*.log
