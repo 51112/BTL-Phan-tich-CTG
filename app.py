@@ -394,17 +394,18 @@ if st.button("Dự báo") and data is not None and title is not None:
             x_mark_dec[:, :15] = x_mark_enc[:, -15:]
 
             informer_model.eval()
-            pred_scaled = informer_model.predict(x_enc, x_mark_enc, x_dec, x_mark_dec).squeeze(-1).detach().numpy().squeeze()
+            with torch.no_grad():
+                pred_scaled = informer_model(x_enc, x_mark_enc, x_dec, x_mark_dec).squeeze(-1).detach().numpy().squeeze()
             informer_forecast = views_scaler.inverse_transform(pred_scaled.reshape(-1, 1)).flatten()[:forecast_days]
             informer_forecast = np.maximum(informer_forecast, 0)
             logger.info(f"Dự báo Informer thành công với {forecast_days} ngày")
         else:
             informer_forecast = np.zeros(forecast_days)
-            logger.warning("Không có mô hình Informer, sử dụng dự báo không")
-        except Exception as e:
-            logger.error(f"Lỗi khi dự báo Informer: {str(e)}")
-            st.error(f"Lỗi khi dự báo Informer: {str(e)}")
-            informer_forecast = np.zeros(forecast_days)
+            logger.warning("Không có mô hình Informer, sử dụng dự báo mặc định (0)")
+    except Exception as e:
+        logger.error(f"Lỗi khi dự báo Informer: {str(e)}")
+        st.error(f"Lỗi khi dự báo Informer: {str(e)}")
+        informer_forecast = np.zeros(forecast_days)
 
     # Trực quan hóa
     st.subheader(f"So sánh dữ liệu thực tế 3 tháng cuối 2024 và dự báo {forecast_days} ngày")
@@ -415,7 +416,7 @@ if st.button("Dự báo") and data is not None and title is not None:
         y=df_three_months['views'],
         name="Thực tế (3 tháng cuối 2024)",
         mode="lines+markers",
-        line=dict(color="gray"),
+        line=dict(color="blue"),
         marker=dict(size=4)
     ))
 
