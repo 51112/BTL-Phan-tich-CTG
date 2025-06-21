@@ -29,7 +29,7 @@ def clean_filename(filename):
 # Thêm đường dẫn Informer2020 và import
 try:
     logger.info("Kiểm tra và thêm đường dẫn Informer2020...")
-    sys.path.append(os.path.abspath("Informer2020"))
+    sys.path.append(os.path.abspath("models/Informer2020"))
     from Informer2020.models.model import Informer
     logger.info("Đã import thành công mô hình Informer")
 except Exception as e:
