@@ -13,7 +13,8 @@ from sklearn.preprocessing import StandardScaler
 from datetime import timedelta
 import logging
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-import pmdarima as pm
+from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.stattools import adfuller
 
 # Thiết lập logging
 logging.basicConfig(level=logging.INFO)
@@ -36,6 +37,11 @@ except Exception as e:
     st.error(f"Lỗi khi import Informer: {str(e)}")
     Informer = None
 
+# Hàm kiểm tra tính dừng
+def check_stationarity(series):
+    result = adfuller(series)
+    return result[1] <= 0.05  # p-value <= 0.05 -> chuỗi dừng
+
 # Hàm làm dữ liệu liên tục
 def make_data_continuous(data):
     logger.info("Bắt đầu làm dữ liệu liên tục...")
@@ -43,6 +49,7 @@ def make_data_continuous(data):
         # Đảm bảo cột date ở dạng datetime
         data['date'] = pd.to_datetime(data['date'], errors='coerce')
         if data['date'].isna().any():
+-penalty-boxes-1:
             logger.error("Cột 'date' chứa giá trị không hợp lệ.")
             st.error("Cột 'date' chứa giá trị không hợp lệ.")
             return None
@@ -59,22 +66,12 @@ def make_data_continuous(data):
         df_continuous = df_continuous.merge(data, on='date', how='left')
 
         # Điền giá trị thiếu
-        # Điền title (giá trị duy nhất trong tập test)
         df_continuous['title'] = df_continuous['title'].fillna(data['title'].iloc[0])
-
-        # Nội suy tuyến tính cho cột views
         df_continuous['views'] = df_continuous['views'].interpolate(method='linear', limit_direction='both')
-
-        # Điền các cột khác
         df_continuous['day_of_week'] = df_continuous['date'].dt.dayofweek
         df_continuous['month'] = df_continuous['date'].dt.month
         df_continuous['quarter'] = df_continuous['date'].dt.quarter
-
-        # Điền tfidf_score bằng giá trị gần nhất (forward fill, rồi backward fill nếu cần)
-        df_continuous['tfidf_score'] = df_continuous['tfidf_score'].fillna(method='ffill')
-        df_continuous['tfidf_score'] = df_continuous['tfidf_score'].fillna(method='bfill')
-
-        # Tạo lại time_idx liên tục
+        df_continuous['tfidf_score'] = df_continuous['tfidf_score'].fillna(method='ffill').fillna(method='bfill')
         df_continuous['time_idx'] = (df_continuous['date'] - start_date).dt.days
 
         # Đảm bảo các cột số ở đúng định dạng
@@ -105,20 +102,18 @@ def validate_new_dataset(data):
     try:
         data['date'] = pd.to_datetime(data['date'], errors='coerce')
         if data['date'].isna().any():
-            st.error("Một số giá trị trong cột 'date' không hợp lệ và đã bị chuyển thành NaT. Vui lòng kiểm tra định dạng ngày tháng.")
+            st.error("Một số giá trị trong cột 'date' không hợp lệ và đã bị chuyển thành NaT.")
             return False
-        # Kiểm tra time_idx là số nguyên không âm
         if not pd.api.types.is_numeric_dtype(data['time_idx']) or (data['time_idx'] < 0).any():
             st.error("Cột 'time_idx' phải là số nguyên không âm.")
             return False
+        for col in ['views', 'day_of_week', 'month', 'quarter', 'tfidf_score']:
+            data[col] = pd.to_numeric(data[col], errors='coerce').fillna(0).astype(float)
+        logger.info("Dataset mới hợp lệ")
+        return True
     except Exception as e:
         st.error(f"Lỗi khi xử lý cột 'date' hoặc 'time_idx': {str(e)}")
         return False
-    # Chuyển đổi các cột số sang kiểu dữ liệu phù hợp
-    for col in ['views', 'day_of_week', 'month', 'quarter', 'tfidf_score']:
-        data[col] = pd.to_numeric(data[col], errors='coerce').fillna(0).astype(float)
-    logger.info("Dataset mới hợp lệ")
-    return True
 
 # Hàm tải file kết quả đánh giá
 @st.cache_data
@@ -143,12 +138,26 @@ def calculate_metrics(actual, predicted):
 def forecast_arima(data, forecast_days):
     logger.info(f"Dự báo ARIMA cho {forecast_days} ngày")
     try:
-        # Lấy chuỗi views của title duy nhất
         series = data['views'].values
-        # Xây dựng và huấn luyện mô hình ARIMA tự động
-        model = pm.auto_arima(series, seasonal=True, m=7, trace=True, error_action='ignore', suppress_warnings=True)
-        # Dự báo
-        forecast, conf_int = model.predict(n_periods=forecast_days, return_conf_int=True)
+        # Kiểm tra tính dừng và chọn order
+        order = (1, 1, 1)  # Mặc định order
+        if not check_stationarity(series):
+            series_diff = np.diff(series)
+            series = series_diff[~np.isnan(series_diff)]
+            order = (1, 1, 1)  # D=1
+            if len(series) < 10:
+                logger.warning(f"Dữ liệu sau diff lần 1 quá ngắn ({len(series)} bản ghi), sử dụng dự báo mặc định.")
+                return np.zeros(forecast_days)
+            if not check_stationarity(series):
+                series_diff = np.diff(series)
+                series = series_diff[~np.isnan(series_diff)]
+                order = (1, 2, 1)  # D=2
+                if len(series) < 10:
+                    logger.warning(f"Dữ liệu sau diff lần 2 quá ngắn ({len(series)} bản ghi), sử dụng dự báo mặc định.")
+                    return np.zeros(forecast_days)
+        # Huấn luyện và dự báo
+        model = ARIMA(series, order=order).fit()
+        forecast = model.forecast(steps=forecast_days)
         forecast = np.maximum(forecast, 0)  # Đảm bảo giá trị không âm
         logger.info(f"Dự báo ARIMA thành công với {forecast_days} ngày")
         return forecast
@@ -166,10 +175,8 @@ def load_tft_model(title, data, forecast_days):
         logger.error(f"Dữ liệu cho {title} không đủ (yêu cầu tối thiểu 15 dòng)")
         st.error(f"Dữ liệu cho {title} không đủ để tạo TimeSeriesDataSet (yêu cầu tối thiểu 15 dòng).")
         return None, None
-    # Chuyển đổi kiểu dữ liệu, đảm bảo tất cả cột là số
     for col in ['views', 'day_of_week', 'month', 'quarter', 'tfidf_score']:
         data[col] = pd.to_numeric(data[col], errors='coerce').fillna(0).astype(float)
-    # Sử dụng time_idx đã có sẵn, không tính lại từ date
     data = data.sort_values('time_idx')
     if data['time_idx'].isna().any():
         logger.error("Cột 'time_idx' chứa giá trị NaN.")
@@ -177,7 +184,7 @@ def load_tft_model(title, data, forecast_days):
         return None, None
     training = TimeSeriesDataSet(
         data,
-        time_idx="time_idx",  # Sử dụng cột time_idx đã có
+        time_idx="time_idx",
         target="views",
         group_ids=["title"],
         allow_missing_timesteps=True,
@@ -200,9 +207,7 @@ def load_tft_model(title, data, forecast_days):
     if os.path.exists(model_path):
         try:
             state_dict = torch.load(model_path, map_location=torch.device('cpu'))
-            # Lọc các tham số khớp với cấu trúc hiện tại
-            model_dict = tft.state_dict()
-            filtered_state_dict = {k: v for k, v in state_dict.items() if k in model_dict and v.shape == model_dict[k].shape}
+            filtered_state_dict = {k: v for k, v in state_dict.items() if k in tft.state_dict() and v.shape == tft.state_dict()[k].shape}
             if len(filtered_state_dict) < len(state_dict):
                 logger.warning(f"Có {len(state_dict) - len(filtered_state_dict)} tham số không khớp cấu trúc, đã bỏ qua.")
             tft.load_state_dict(filtered_state_dict, strict=False)
@@ -273,14 +278,13 @@ if uploaded_file is not None:
         data = pd.read_csv(uploaded_file)
         logger.info(f"Các cột trong file CSV: {list(data.columns)}")
         if validate_new_dataset(data):
-            # Làm dữ liệu liên tục trước khi xử lý
             data = make_data_continuous(data)
             if data is None:
                 st.error("Không thể làm dữ liệu liên tục. Vui lòng kiểm tra lại.")
                 data = None
                 title = None
             else:
-                data['time_idx'] = data['time_idx'].astype(int)  # Đảm bảo time_idx là integer
+                data['time_idx'] = data['time_idx'].astype(int)
                 data.fillna(0, inplace=True)
                 title = data['title'].iloc[0]
                 st.success(f"Dataset mới đã được tải với title: {title}")
@@ -305,11 +309,9 @@ forecast_days = st.slider("Chọn số ngày dự báo (tối đa 30 ngày):", m
 # Dự báo
 if st.button("Dự báo") and data is not None and title is not None:
     logger.info(f"Bắt đầu dự báo cho title: {title} với {forecast_days} ngày")
-    # Sử dụng dữ liệu đã có time_idx, không cần tổng hợp lại
     df_title = data.copy()
     df_title = df_title.sort_values('time_idx')
     
-    # Lấy 3 tháng cuối năm 2024 (dựa trên time_idx)
     end_date = pd.to_datetime('2024-12-31')
     last_month_start = pd.to_datetime('2024-11-01')
     two_months_ago_start = pd.to_datetime('2024-10-01')
@@ -330,7 +332,6 @@ if st.button("Dự báo") and data is not None and title is not None:
             for _ in range(steps):
                 for col in ['views', 'day_of_week', 'month', 'quarter', 'tfidf_score']:
                     df_input[col] = pd.to_numeric(df_input[col], errors='coerce').fillna(0).astype(float)
-                # Sử dụng time_idx đã có, không cần tạo lại
                 df_input = df_input.sort_values('time_idx')
                 if df_input['time_idx'].isna().any():
                     logger.error("Cột 'time_idx' chứa giá trị NaN trong dự báo TFT.")
@@ -489,22 +490,18 @@ if st.button("Dự báo") and data is not None and title is not None:
     # Hiển thị kết quả đánh giá
     st.subheader("Kết quả đánh giá mô hình (dựa trên dữ liệu đại diện)")
     try:
-        # Tải kết quả từ file (nếu có)
         arima_results = load_results_file("arima_results.csv")
         tft_results = load_results_file("tft_results.csv")
         informer_results = load_results_file("informer_results.csv")
 
-        # Lấy dữ liệu thực tế cuối cùng để so sánh (giả sử dùng dữ liệu đã biết)
         actual_values = df_three_months['views'].tail(forecast_days).values
         if len(actual_values) < forecast_days:
             actual_values = np.pad(actual_values, (0, forecast_days - len(actual_values)), mode='constant', constant_values=0)
 
-        # Tính MAE và RMSE cho từng mô hình
         arima_mae, arima_rmse = calculate_metrics(actual_values, arima_forecast)
         tft_mae, tft_rmse = calculate_metrics(actual_values, tft_forecast)
         informer_mae, informer_rmse = calculate_metrics(actual_values, informer_forecast)
 
-        # Nếu không tính được (do dữ liệu không đủ), dùng giá trị từ file
         if arima_mae is None or arima_rmse is None:
             arima_mae = arima_results['mae'].mean() if arima_results is not None else "N/A"
             arima_rmse = arima_results['rmse'].mean() if arima_results is not None else "N/A"
