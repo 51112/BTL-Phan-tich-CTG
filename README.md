@@ -13,17 +13,17 @@ Trần Anh Đạt
 
 
 # Thời gian: Tháng 6, 2025
-Ngôn ngữ lập trình: Python
-Dữ liệu: Bộ dữ liệu Wikipedia Structured Contents (Kaggle) https://www.kaggle.com/datasets/wikimedia-foundation/wikipedia-structured-contents
+### Ngôn ngữ lập trình: Python
+### Dữ liệu: Bộ dữ liệu Wikipedia Structured Contents (Kaggle) https://www.kaggle.com/datasets/wikimedia-foundation/wikipedia-structured-contents
 
 # Mục tiêu
 
-Tổng quát: Xây dựng hệ thống dự báo lượt truy cập bài viết trên Wikipedia với độ chính xác cao, sử dụng các mô hình phân tích chuỗi thời gian.
-Cụ thể:
-Áp dụng các mô hình ARIMA, Temporal Fusion Transformer (TFT), và Informer.
-So sánh hiệu suất các mô hình trên dữ liệu thực tế.
-Đánh giá độ chính xác và khả năng ứng dụng thực tế.
-Đề xuất mô hình phù hợp nhất cho bài toán.
+### Tổng quát: Xây dựng hệ thống dự báo lượt truy cập bài viết trên Wikipedia với độ chính xác cao, sử dụng các mô hình phân tích chuỗi thời gian.
+### Cụ thể:
+#### Áp dụng các mô hình ARIMA, Temporal Fusion Transformer (TFT), và Informer.
+#### So sánh hiệu suất các mô hình trên dữ liệu thực tế.
+#### Đánh giá độ chính xác và khả năng ứng dụng thực tế.
+#### Đề xuất mô hình phù hợp nhất cho bài toán.
 
 
 
@@ -53,52 +53,52 @@ project/
 
 # Công cụ và thư viện
 
-Ngôn ngữ: Python
-Môi trường phát triển: VS Code
-Thư viện chính:
-pandas, numpy: Xử lý dữ liệu
-statsmodels: Mô hình ARIMA
-sklearn: Chuẩn hóa dữ liệu, tính TF-IDF, đánh giá
-pytorch, pytorch_forecasting: Mô hình TFT
-Informer2020: Mô hình Informer
-streamlit, plotly: Giao diện và trực quan hóa
-tqdm, joblib, multiprocessing, logging: Tăng tốc và quản lý quy trình
+#### Ngôn ngữ: Python
+#### Môi trường phát triển: VS Code
+#### Thư viện chính:
+#### pandas, numpy: Xử lý dữ liệu
+#### statsmodels: Mô hình ARIMA
+#### sklearn: Chuẩn hóa dữ liệu, tính TF-IDF, đánh giá
+#### pytorch, pytorch_forecasting: Mô hình TFT
+#### Informer2020: Mô hình Informer
+#### streamlit, plotly: Giao diện và trực quan hóa
+#### tqdm, joblib, multiprocessing, logging: Tăng tốc và quản lý quy trình
 
 
 
 # Quy trình thực hiện
 
-Thu thập dữ liệu:
+### Thu thập dữ liệu:
 
-Tải bộ dữ liệu Wikipedia Structured Contents từ Kaggle và đặt vào data/raw/.
-Crawl dữ liệu lượt truy cập qua API Wikipedia (xem Tien_xu_ly/Crawl.ipynb).
-
-
-Tiền xử lý dữ liệu:
-
-Chuyển đổi file JSONL thành CSV (xem Tien_xu_ly/Tien_xu_ly.ipynb).
-Lọc các cột quan trọng (title, abstract, date, view).
-Tính điểm TF-IDF cho nội dung bài viết.
-Lưu kết quả vào data/processed/ (các file CSV thô, lọc, crawl, long).
+#### Tải bộ dữ liệu Wikipedia Structured Contents từ Kaggle và đặt vào data/raw/.
+#### Crawl dữ liệu lượt truy cập qua API Wikipedia (xem Tien_xu_ly/Crawl.ipynb).
 
 
-Xây dựng mô hình:
+### Tiền xử lý dữ liệu:
 
-ARIMA: Mô hình cổ điển, hiệu quả với dữ liệu tuyến tính.
-TFT: Mô hình học sâu, xử lý đa biến, sử dụng cơ chế attention.
-Informer: Mô hình Transformer cải tiến cho chuỗi thời gian dài.
-
-
-Đánh giá mô hình:
-
-Sử dụng các độ đo MAE và RMSE.
-Lưu kết quả vào results/.
+#### Chuyển đổi file JSONL thành CSV (xem Tien_xu_ly/Tien_xu_ly.ipynb).
+#### Lọc các cột quan trọng (title, abstract, date, view).
+#### Tính điểm TF-IDF cho nội dung bài viết.
+#### Lưu kết quả vào data/processed/ (các file CSV thô, lọc, crawl, long).
 
 
-Triển khai ứng dụng:
+### Xây dựng mô hình:
 
-Phát triển ứng dụng Streamlit (app.py) cho phép người dùng tải file CSV và dự báo lượt truy cập (1-30 ngày).
-Trực quan hóa kết quả bằng biểu đồ.
+#### ARIMA: Mô hình cổ điển, hiệu quả với dữ liệu tuyến tính.
+#### TFT: Mô hình học sâu, xử lý đa biến, sử dụng cơ chế attention.
+#### Informer: Mô hình Transformer cải tiến cho chuỗi thời gian dài.
+
+
+### Đánh giá mô hình:
+
+#### Sử dụng các độ đo MAE và RMSE.
+#### Lưu kết quả vào results/.
+
+
+### Triển khai ứng dụng:
+
+#### Phát triển ứng dụng Streamlit (app.py) cho phép người dùng tải file CSV và dự báo lượt truy cập (1-30 ngày).
+#### Trực quan hóa kết quả bằng biểu đồ.
 
 
 
