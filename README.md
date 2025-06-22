@@ -28,103 +28,29 @@ Trần Anh Đạt
 
 
 # Cấu trúc dự án
+# Cấu trúc dự án
 project/
-
-
-
-
-
-.devcontainer/
-
-
-
-
-
-devcontainer.json (Cấu hình môi trường phát triển)
-
-
-
-Tien_xu_ly/
-
-
-
-
-
-Crawl.ipynb (Notebook crawl dữ liệu)
-
-
-
-Tien_xu_ly.ipynb (Notebook tiền xử lý dữ liệu)
-
-
-
-data/
-
-
-
-
-
-raw/ (Chứa file JSONL gốc từ Kaggle)
-
-
-
-processed/ (Chứa file CSV thô, lọc, crawl, long - không đẩy lên Git)
-
-
-
-models/
-
-
-
-
-
-Informer2020/ (Thư mục hỗ trợ mô hình Informer)
-
-
-
-representative_arima.pkl (Mô hình ARIMA đại diện)
-
-
-
-representative_informer.pt (Mô hình Informer đại diện)
-
-
-
-representative_tft.pt (Mô hình TFT đại diện)
-
-
-
-results/
-
-
-
-
-
-arima_results.csv (Kết quả đánh giá ARIMA)
-
-
-
-informer_results.csv (Kết quả đánh giá Informer)
-
-
-
-tft_results.csv (Kết quả đánh giá TFT)
-
-
-
-.gitignore (Loại bỏ file nhạy cảm khỏi Git)
-
-
-
-app.py (Ứng dụng Streamlit)
-
-
-
-requirements.txt (Danh sách thư viện cần thiết)
-
-
-
-system_requirements.txt (Yêu cầu hệ thống)
+├── .devcontainer/
+│   └── devcontainer.json
+├── Tien_xu_ly/
+│   ├── Crawl.ipynb
+│   └── Tien_xu_ly.ipynb
+├── data/
+│   ├── raw/
+│   └── processed/
+├── models/
+│   ├── Informer2020/
+│   ├── representative_arima.pkl
+│   ├── representative_informer.pt
+│   └── representative_tft.pt
+├── results/
+│   ├── arima_results.csv
+│   ├── informer_results.csv
+│   └── tft_results.csv
+├── .gitignore
+├── app.py
+├── requirements.txt
+└── system_requirements.txt
 
 # Công cụ và thư viện
 
