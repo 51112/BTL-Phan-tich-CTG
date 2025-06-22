@@ -6,10 +6,10 @@
 ## Giảng viên hướng dẫn: 
 Trần Anh Đạt
 ## Nhóm sinh viên thực hiện:
-Bùi Anh Tuấn, 64 TTNT1
-Phạm Đình Bảo, 64 TTNT1
-Nguyễn Đức Anh, 63 TTNT
-Trần Quốc Huy, 64 TTNT1
+### Bùi Anh Tuấn, 64 TTNT1
+### Phạm Đình Bảo, 64 TTNT1
+### Nguyễn Đức Anh, 63 TTNT
+### Trần Quốc Huy, 64 TTNT1
 
 
 # Thời gian: Tháng 6, 2025
