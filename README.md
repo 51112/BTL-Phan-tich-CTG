@@ -12,7 +12,7 @@ Nguyễn Đức Anh, 63 TTNT
 Trần Quốc Huy, 64 TTNT1
 
 
-Thời gian: Tháng 6, 2025
+# Thời gian: Tháng 6, 2025
 Ngôn ngữ lập trình: Python
 Dữ liệu: Bộ dữ liệu Wikipedia Structured Contents (Kaggle) https://www.kaggle.com/datasets/wikimedia-foundation/wikipedia-structured-contents
 
