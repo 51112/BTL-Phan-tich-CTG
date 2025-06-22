@@ -1,10 +1,11 @@
-Dự báo Lượt Truy cập Bài viết trên Wikipedia
+# Dự báo Lượt Truy cập Bài viết trên Wikipedia
 Đây là dự án bài tập lớn môn Phân tích Chuỗi Thời gian thuộc Khoa Công nghệ Thông tin, Trường Đại học Thủy Lợi. Dự án tập trung vào việc xây dựng hệ thống dự báo lượt truy cập bài viết trên Wikipedia dựa trên dữ liệu lịch sử và nội dung bài viết, sử dụng các mô hình chuỗi thời gian hiện đại.
-Thông tin dự án
+# Thông tin dự án
 
 Đề tài: Dự báo lượt truy cập bài viết trên Wikipedia dựa trên Logs và nội dung bài viết
-Giảng viên hướng dẫn: Trần Anh Đạt
-Sinh viên thực hiện:
+## Giảng viên hướng dẫn: 
+Trần Anh Đạt
+## Nhóm sinh viên thực hiện:
 Bùi Anh Tuấn, 64 TTNT1
 Phạm Đình Bảo, 64 TTNT1
 Nguyễn Đức Anh, 63 TTNT
@@ -15,7 +16,7 @@ Thời gian: Tháng 6, 2025
 Ngôn ngữ lập trình: Python
 Dữ liệu: Bộ dữ liệu Wikipedia Structured Contents (Kaggle) https://www.kaggle.com/datasets/wikimedia-foundation/wikipedia-structured-contents
 
-Mục tiêu
+# Mục tiêu
 
 Tổng quát: Xây dựng hệ thống dự báo lượt truy cập bài viết trên Wikipedia với độ chính xác cao, sử dụng các mô hình phân tích chuỗi thời gian.
 Cụ thể:
@@ -26,7 +27,7 @@ So sánh hiệu suất các mô hình trên dữ liệu thực tế.
 
 
 
-Cấu trúc dự án
+# Cấu trúc dự án
 project/
 ├── .devcontainer/              # Cấu hình môi trường phát triển
 │   └── devcontainer.json
@@ -50,7 +51,7 @@ project/
 ├── requirements.txt           # Danh sách thư viện cần thiết
 └── system_requirements.txt    # Yêu cầu hệ thống
 
-Công cụ và thư viện
+# Công cụ và thư viện
 
 Ngôn ngữ: Python
 Môi trường phát triển: VS Code
@@ -65,7 +66,7 @@ tqdm, joblib, multiprocessing, logging: Tăng tốc và quản lý quy trình
 
 
 
-Quy trình thực hiện
+# Quy trình thực hiện
 
 Thu thập dữ liệu:
 
@@ -101,7 +102,7 @@ Trực quan hóa kết quả bằng biểu đồ.
 
 
 
-Hướng dẫn cài đặt
+# Hướng dẫn cài đặt
 
 Clone repository:
 git clone <repository_url>
@@ -139,7 +140,7 @@ streamlit run app.py
 
 
 
-Kết quả
+# Kết quả
 
 Hiệu suất mô hình:
 
@@ -178,7 +179,7 @@ Mở rộng sang dữ liệu đa ngôn ngữ.
 
 
 
-Liên hệ
+# Liên hệ
 Nếu có câu hỏi hoặc cần hỗ trợ, vui lòng liên hệ nhóm thực hiện qua email:  anhnguyen080123@gmail.com
 
 
