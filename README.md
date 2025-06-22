@@ -29,27 +29,27 @@ Trần Anh Đạt
 # Cấu trúc dự án
 ```
 project/
-|-- .devcontainer/
-|   |-- devcontainer.json                # Cấu hình container phát triển
-|-- Tien_xu_ly/
-|   |-- Crawl.ipynb                      # Notebook thu thập dữ liệu
-|   |-- Tien_xu_ly.ipynb                 # Notebook tiền xử lý dữ liệu
-|-- data/
-|   |-- raw/                             # Dữ liệu thô chưa xử lý
-|   |-- processed/                       # Dữ liệu đã được xử lý
-|-- models/
-|   |-- Informer2020/                    # Thư mục chứa mô hình Informer
-|   |-- representative_arima.pkl         # Mô hình ARIMA đã huấn luyện
-|   |-- representative_informer.pt       # Mô hình Informer đã huấn luyện
-|   |-- representative_tft.pt            # Mô hình TFT đã huấn luyện
-|-- results/
-|   |-- arima_results.csv                # Kết quả dự báo của ARIMA
-|   |-- informer_results.csv             # Kết quả dự báo của Informer
-|   |-- tft_results.csv                  # Kết quả dự báo của TFT
-|-- .gitignore                           # Danh sách file/thư mục bỏ qua git
-|-- app.py                               # Ứng dụng web chính
-|-- requirements.txt                     # Danh sách thư viện Python
-|-- system_requirements.txt              # Yêu cầu hệ thống
+├── .devcontainer/              # Cấu hình môi trường phát triển
+│   └── devcontainer.json
+├── Tien_xu_ly/                # Jupyter notebook cho tiền xử lý và crawl
+│   ├── Crawl.ipynb
+│   └── Tien_xu_ly.ipynb
+├── data/                      # Dữ liệu thô và đã xử lý (không đẩy lên Git)
+│   ├── raw/                   # File JSONL gốc (tải từ Kaggle)
+│   └── processed/             # File CSV thô, lọc, crawl, long
+├── models/                    # Mô hình đã huấn luyện
+│   ├── Informer2020/
+│   ├── representative_arima.pkl
+│   ├── representative_informer.pt
+│   └── representative_tft.pt
+├── results/                   # Kết quả đánh giá mô hình
+│   ├── arima_results.csv
+│   ├── informer_results.csv
+│   └── tft_results.csv
+├── .gitignore                 # Loại bỏ file nhạy cảm khỏi Git
+├── app.py                     # Ứng dụng Streamlit
+├── requirements.txt           # Danh sách thư viện cần thiết
+└── system_requirements.txt    # Yêu cầu hệ thống
 ```
 
 # Công cụ và thư viện
