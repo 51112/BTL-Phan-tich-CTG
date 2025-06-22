@@ -28,29 +28,28 @@ Trần Anh Đạt
 
 
 # Cấu trúc dự án
-# Cấu trúc dự án
-project/
-├── .devcontainer/
-│   └── devcontainer.json
-├── Tien_xu_ly/
-│   ├── Crawl.ipynb
-│   └── Tien_xu_ly.ipynb
-├── data/
-│   ├── raw/
-│   └── processed/
-├── models/
-│   ├── Informer2020/
-│   ├── representative_arima.pkl
-│   ├── representative_informer.pt
-│   └── representative_tft.pt
-├── results/
-│   ├── arima_results.csv
-│   ├── informer_results.csv
-│   └── tft_results.csv
-├── .gitignore
-├── app.py
-├── requirements.txt
-└── system_requirements.txt
+## project/
+### ├── .devcontainer/              # Cấu hình môi trường phát triển
+### │   └── devcontainer.json
+### ├── Tien_xu_ly/                # Jupyter notebook cho tiền xử lý và crawl
+### │   ├── Crawl.ipynb
+### │   └── Tien_xu_ly.ipynb
+### ├── data/                      # Dữ liệu thô và đã xử lý (không đẩy lên Git)
+### │   ├── raw/                   # File JSONL gốc (tải từ Kaggle)
+### │   └── processed/             # File CSV thô, lọc, crawl, long
+### ├── models/                    # Mô hình đã huấn luyện
+### │   ├── Informer2020/
+### │   ├── representative_arima.pkl
+### │   ├── representative_informer.pt
+### │   └── representative_tft.pt
+### ├── results/                   # Kết quả đánh giá mô hình
+### │   ├── arima_results.csv
+### │   ├── informer_results.csv
+### │   └── tft_results.csv
+### ├── .gitignore                 # Loại bỏ file nhạy cảm khỏi Git
+### ├── app.py                     # Ứng dụng Streamlit
+### ├── requirements.txt           # Danh sách thư viện cần thiết
+### └── system_requirements.txt    # Yêu cầu hệ thống
 
 # Công cụ và thư viện
 
