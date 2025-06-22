@@ -27,6 +27,7 @@ Trần Anh Đạt
 
 
 # Cấu trúc dự án
+```
 project/
 |-- .devcontainer/
 |   |-- devcontainer.json                # Cấu hình container phát triển
@@ -49,6 +50,7 @@ project/
 |-- app.py                               # Ứng dụng web chính
 |-- requirements.txt                     # Danh sách thư viện Python
 |-- system_requirements.txt              # Yêu cầu hệ thống
+```
 
 # Công cụ và thư viện
 
