@@ -26,16 +26,9 @@ def clean_filename(filename):
     cleaned = re.sub(r'\s+', '_', cleaned.strip())
     return cleaned
 
-# Thêm đường dẫn Informer2020 và import
-try:
-    logger.info("Kiểm tra và thêm đường dẫn Informer2020...")
-    sys.path.append(os.path.abspath("models/Informer2020"))
-    from Informer2020.models.model import Informer
-    logger.info("Đã import thành công mô hình Informer")
-except Exception as e:
-    logger.error(f"Lỗi khi import Informer: {str(e)}")
-    st.error(f"Lỗi khi import Informer: {str(e)}")
-    Informer = None
+# Thêm thư mục Informer2020 vào sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'models', 'Informer2020')))
+from Informer2020.models.model import Informer
 
 # Hàm kiểm tra tính dừng
 def check_stationarity(series):
