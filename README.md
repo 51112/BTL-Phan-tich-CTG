@@ -34,9 +34,9 @@ project/
 ├── Tien_xu_ly/                # Jupyter notebook cho tiền xử lý và crawl
 │   ├── Crawl.ipynb
 │   └── Tien_xu_ly.ipynb
-├── models/                    # Mô hình đã huấn luyện
-│   ├── Informer2020/
-│   ├── representative_arima.pkl
+├── Informer2020/                # Thư mục chứa mô hình Informer 
+├── models/  
+│   ├── representative_arima.pkl   # Mô hình đã huấn luyện 
 │   ├── representative_informer.pt
 │   └── representative_tft.pt
 ├── results/                   # Kết quả đánh giá mô hình
