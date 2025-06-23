@@ -518,9 +518,9 @@ if st.button("Dự báo") and data is not None and title is not None:
     # Hiển thị kết quả đánh giá
     st.subheader("Kết quả đánh giá mô hình (dựa trên dữ liệu đại diện)")
     try:
-        arima_results = load_results_file("arima_results.csv")
-        tft_results = load_results_file("tft_results.csv")
-        informer_results = load_results_file("informer_results.csv")
+        arima_results = load_results_file("results/arima_results.csv")
+        tft_results = load_results_file("results/tft_results.csv")
+        informer_results = load_results_file("results/informer_results.csv")
 
         actual_values = df_three_months['views'].tail(forecast_days).values
         if len(actual_values) < forecast_days:
