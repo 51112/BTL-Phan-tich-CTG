@@ -14,3 +14,7 @@ data/
 
 # Ignore log files
 *.log
+
+# Allow models and results folders
+!models/
+!results/
