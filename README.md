@@ -34,9 +34,6 @@ project/
 ├── Tien_xu_ly/                # Jupyter notebook cho tiền xử lý và crawl
 │   ├── Crawl.ipynb
 │   └── Tien_xu_ly.ipynb
-├── data/                      # Dữ liệu thô và đã xử lý (không đẩy lên Git)
-│   ├── raw/                   # File JSONL gốc (tải từ Kaggle)
-│   └── processed/             # File CSV thô, lọc, crawl, long
 ├── models/                    # Mô hình đã huấn luyện
 │   ├── Informer2020/
 │   ├── representative_arima.pkl
