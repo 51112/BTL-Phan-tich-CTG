@@ -12,9 +12,5 @@ venv/
 # Ignore data directory (if any)
 data/
 
-# Ignore models and results directories
-models/
-results/
-
 # Ignore log files
 *.log
